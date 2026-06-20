@@ -4,7 +4,10 @@ const mockData = {
   folders: [
     { id: 1, name: '신생아', label: '0개월' },
     { id: 2, name: '1개월',   label: '1개월' },
-    { id: 3, name: '2개월',   label: '2개월' }
+    { id: 3, name: '2개월',   label: '2개월' },
+    { id: 4, name: '3개월', label: '3개월' },
+    { id: 5, name: '4개월',   label: '4개월' },
+    { id: 6, name: '5개월',   label: '5개월' }
   ],
   videos: {
     1: [
@@ -20,6 +23,9 @@ const mockData = {
     3: []
   }
 };
+
+// url 확장자로 사진/영상 구분
+const isImage = (url) => /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(url || '');
 
 const Style = () => (
   <style>{`
@@ -112,7 +118,8 @@ const Style = () => (
       background: #f1ece3;
     }
 
-    .gj-video-frame video {
+    .gj-video-frame video,
+    .gj-video-frame img {
       width: 100%;
       display: block;
       border-radius: 2px;
@@ -201,7 +208,9 @@ export default function App() {
                     </div>
                   </div>
                   <div className="gj-video-frame">
-                    <video src={video.url} controls />
+                    {isImage(video.url)
+                      ? <img src={video.url} alt={video.title} />
+                      : <video src={video.url} controls />}
                   </div>
                 </div>
               ))
