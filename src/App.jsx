@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 const mockData = {
   folders: [
     { id: 1, name: '신생아', label: '0개월' },
-    { id: 2, name: '1개월',   label: '1개월' },
-    { id: 3, name: '2개월',   label: '2개월' },
-    { id: 4, name: '3개월', label: '3개월' },
-    { id: 5, name: '4개월',   label: '4개월' },
-    { id: 6, name: '5개월',   label: '5개월' }
+    { id: 2, name: '1개월(준비중)',   label: '1개월' },
+    { id: 3, name: '2개월(준비중)',   label: '2개월' },
+    { id: 4, name: '3개월(준비중)', label: '3개월' },
+    { id: 5, name: '4개월(준비중)',   label: '4개월' },
+    { id: 6, name: '5개월(준비중)',   label: '5개월' }
   ],
   videos: {
     1: [
@@ -15,11 +15,14 @@ const mockData = {
       { id: 102, title: '첫 면회', date: '2026.01.10', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5682.jpeg' },
       { id: 103, title: '조리원 첫 모자동실', date: '2026.01.12', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5727.jpeg' },
       { id: 104, title: '숙면', date: '2026.01.14', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5817.jpeg' },
-      { id: 105, title: '찡긋', date: '2026.01.16', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5859.jpeg' },
-      { id: 106, title: '아빠품에서', date: '2026.01.16', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5872.jpeg' },
-      { id: 107, title: '동글동글', date: '2026.01.22', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5960.jpeg' }
+      { id: 105, title: '오~', date: '2026.01.14', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5813.jpeg' },
+      { id: 106, title: '찡긋', date: '2026.01.16', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5859.jpeg' },
+      { id: 107, title: '아빠품에서', date: '2026.01.16', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5872.jpeg' },
+      { id: 108, title: '너무 예쁜 우리 애기', date: '2026.01.17', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5883.jpeg' },
+      { id: 109, title: '미소 천사', date: '2026.01.18', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5901.jpeg' },
+      { id: 110, title: '동글동글', date: '2026.01.22', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5960.jpeg' }
     ],
-    2: [{ id: 201, title: '', date: '2026.02.14', url: '' }],
+    2: [],
     3: []
   }
 };
