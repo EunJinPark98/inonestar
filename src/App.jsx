@@ -8,10 +8,10 @@ const mockData = {
   ],
   videos: {
     1: [
-    { id: 101, title: '1월 9일, 탄생', date: '2026.01.09', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy3u265OPu_S0WGwUC7rThjurgJ0N1L8K_talkv_high.mp4' },
-    { id: 102, title: '첫 면회', date: '2026.01.10', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy30vgyGzU_sgpwHYkZ7BfGuLnao0UK91_talkv_high.mp4' },
-    
-  ],
+      { id: 101, title: '1월 9일, 탄생', date: '2026.01.09', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy3u265OPu_S0WGwUC7rThjurgJ0N1L8K_talkv_high.mp4' },
+      { id: 102, title: '첫 면회', date: '2026.01.10', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5682.jpeg' },
+      { id: 103, title: '조리원 첫 모자동실', date: '2026.01.12', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5727.jpeg' }
+    ],
     2: [{ id: 201, title: '', date: '2026.02.14', url: '' }],
     3: []
   }
@@ -133,7 +133,7 @@ export default function App() {
             <div style={{ marginBottom: '44px' }}>
               <div className="gj-eyebrow" style={{ marginBottom: '10px' }}>GROWTH JOURNAL</div>
               <h1 className="gj-serif" style={{ fontSize: '28px', fontWeight: 700, margin: 0, lineHeight: 1.4 }}>
-                한별이의 기록
+                한별이 앨범
               </h1>
               <p style={{ fontSize: '13px', color: 'var(--ink-soft)', marginTop: '8px', lineHeight: 1.6 }}>
                 태어난 순간부터, 한 달 한 달의 자라는 모습을 담았습니다.
@@ -188,9 +188,6 @@ export default function App() {
             ) : (
               mockData.videos[currentFolder].map(video => (
                 <div key={video.id} className="gj-video-card">
-                  <div className="gj-video-frame">
-                    <video src={video.url} controls />
-                  </div>
                   <div className="gj-video-caption">
                     <div style={{ fontSize: '11px', color: 'var(--sage)', letterSpacing: '0.05em', marginBottom: '4px' }}>
                       {video.date}
@@ -198,6 +195,9 @@ export default function App() {
                     <div className="gj-serif" style={{ fontSize: '16px', fontWeight: 500 }}>
                       {video.title}
                     </div>
+                  </div>
+                  <div className="gj-video-frame">
+                    <video src={video.url} controls />
                   </div>
                 </div>
               ))
