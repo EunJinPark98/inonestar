@@ -7,7 +7,7 @@ const mockData = {
     { id: 3, name: '🧸 2개월' }
   ],
   videos: {
-    1: [{ id: 101, title: '처음 집에 온 날 🏠', url: 'https://www.w3schools.com/html/mov_bbb.mp4' }],
+    1: [{ id: 101, title: '1월 9일 한별이 탄생', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy3u265OPu_S0WGwUC7rThjurgJ0N1L8K_talkv_high.mp4' }],
     2: [{ id: 201, title: '우렁찬 옹알이 📣', url: 'https://www.w3schools.com/html/movie.mp4' }],
     3: []
   }
@@ -23,7 +23,7 @@ export default function App() {
       {currentFolder === null ? (
         // [메인 화면] 폴더 목록 보여주기
         <div>
-          <h3 style={{ color: '#555' }}>성장 앨범 폴더</h3>
+          <h3 style={{ color: '#eee' }}>성장 앨범 폴더</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
             {mockData.folders.map(folder => (
               <div 
