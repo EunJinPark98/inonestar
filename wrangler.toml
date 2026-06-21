@@ -1,6 +1,7 @@
 name = "inonestar"
 compatibility_date = "2026-06-20"
 
+# [수정된 부분]: 빌드된 파일 폴더와 public 폴더를 모두 포함하라고 지정합니다.
 [assets]
 directory = "./dist"
 binding = "ASSETS"
