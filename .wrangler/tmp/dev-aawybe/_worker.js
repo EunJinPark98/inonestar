@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/bundle-WbOYZy/checked-fetch.js
+// .wrangler/tmp/bundle-pHFjPr/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -39,6 +39,9 @@ var worker_default = {
         if (request.method === "GET") return handleGetAlbum(env);
         if (request.method === "POST") return handleSaveAlbum(request, env);
       }
+      if (url.pathname === "/functions/api/upload" && request.method === "POST") {
+        return handleUpload(request, env);
+      }
       if (url.pathname === "/functions/api/list-photos" && request.method === "GET") {
         return handleListPhotos(env);
       }
@@ -62,6 +65,25 @@ async function handleSaveAlbum(request, env) {
   return Response.json({ success: true });
 }
 __name(handleSaveAlbum, "handleSaveAlbum");
+async function handleUpload(request, env) {
+  const formData = await request.formData();
+  const file = formData.get("file");
+  const password = formData.get("password");
+  if (password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: "\uBE44\uBC00\uBC88\uD638\uAC00 \uD2C0\uB838\uC2B5\uB2C8\uB2E4." }, { status: 401 });
+  }
+  if (!file || !file.name) {
+    return Response.json({ success: false, error: "\uD30C\uC77C\uC774 \uC5C6\uC2B5\uB2C8\uB2E4." }, { status: 400 });
+  }
+  const ext = file.name.split(".").pop();
+  const key = `${Date.now()}.${ext}`;
+  await env.PHOTO_BUCKET.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type }
+  });
+  const url = R2_PUBLIC_BASE + encodeURIComponent(key);
+  return Response.json({ success: true, url, key });
+}
+__name(handleUpload, "handleUpload");
 async function handleListPhotos(env) {
   const listed = await env.PHOTO_BUCKET.list({ limit: 1e3 });
   const files = listed.objects.filter((obj) => /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov)$/i.test(obj.key)).map((obj) => ({
@@ -115,7 +137,7 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-WbOYZy/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-pHFjPr/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
@@ -147,7 +169,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-WbOYZy/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-pHFjPr/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

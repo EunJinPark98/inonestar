@@ -12,6 +12,10 @@ export default {
         if (request.method === 'POST') return handleSaveAlbum(request, env);
       }
 
+      if (url.pathname === '/functions/api/upload' && request.method === 'POST') {
+        return handleUpload(request, env);
+      }
+
       if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
         return handleListPhotos(env);
       }
@@ -37,6 +41,30 @@ async function handleSaveAlbum(request, env) {
 
   await env.ALBUM_KV.put(KV_KEY, JSON.stringify(body.data || []));
   return Response.json({ success: true });
+}
+
+async function handleUpload(request, env) {
+  const formData = await request.formData();
+  const file = formData.get('file');
+  const password = formData.get('password');
+
+  if (password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  if (!file || !file.name) {
+    return Response.json({ success: false, error: '파일이 없습니다.' }, { status: 400 });
+  }
+
+  const ext = file.name.split('.').pop();
+  const key = `${Date.now()}.${ext}`;
+
+  await env.PHOTO_BUCKET.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type }
+  });
+
+  const url = R2_PUBLIC_BASE + encodeURIComponent(key);
+  return Response.json({ success: true, url, key });
 }
 
 async function handleListPhotos(env) {

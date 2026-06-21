@@ -5,6 +5,7 @@ compatibility_date = "2024-09-01"
 [assets]
 directory = "./dist"
 binding = "ASSETS"
+not_found_handling = "single-page-application"
 
 [[kv_namespaces]]
 binding = "ALBUM_KV"
