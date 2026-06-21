@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 const mockData = {
   folders: [
@@ -395,6 +395,8 @@ function PhotoDetailView({ folder, items, onBack }) {
    ═══════════════════════════════════ */
 function PhotoCard({ item, index }) {
   const [loaded, setLoaded] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const videoRef = useRef(null);
   const photo = isImage(item.url);
 
   return (
@@ -432,7 +434,7 @@ function PhotoCard({ item, index }) {
         borderRadius: '14px',
         overflow: 'hidden',
         boxShadow: t.shadowMd,
-        minHeight: photo ? '200px' : 'auto',
+        minHeight: photo ? '200px' : '200px',
       }}>
         {!loaded && photo && (
           <div className="img-loading" style={{
@@ -453,16 +455,51 @@ function PhotoCard({ item, index }) {
             }}
           />
         ) : (
-          <video
-            src={item.url}
-            controls
-            preload="metadata"
-            playsInline
-            style={{
-              width: '100%',
-              display: 'block',
-            }}
-          />
+          <>
+            <video
+              ref={videoRef}
+              src={item.url + '#t=0.5'}
+              preload="metadata"
+              playsInline
+              controls={playing}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onEnded={() => setPlaying(false)}
+              style={{
+                width: '100%',
+                display: 'block',
+                minHeight: '200px',
+                objectFit: 'cover',
+              }}
+            />
+            {!playing && (
+              <div
+                onClick={() => {
+                  const v = videoRef.current;
+                  if (v) { v.currentTime = 0; v.play(); }
+                }}
+                style={{
+                  position: 'absolute', inset: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  background: 'rgba(0,0,0,0.15)',
+                }}
+              >
+                <div style={{
+                  width: '52px', height: '52px',
+                  borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.9)',
+                  backdropFilter: 'blur(4px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
+                }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill={t.ink}>
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
