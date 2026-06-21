@@ -105,6 +105,8 @@ export default function Admin() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [view, setView] = useState('register');
+  const [editIndex, setEditIndex] = useState(null);
+  const [editData, setEditData] = useState(null);
 
   const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1' });
   const [uploading, setUploading] = useState(false);
@@ -558,7 +560,7 @@ export default function Admin() {
             <button
               type="button"
               className="btn-press"
-              onClick={() => { setView('register'); window.scrollTo({ top: 0 }); }}
+              onClick={() => { setView('register'); setEditIndex(null); setEditData(null); window.scrollTo({ top: 0 }); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 background: 'none', border: 'none', cursor: 'pointer',
@@ -588,54 +590,140 @@ export default function Admin() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {photos.map((item, index) => (
-                  <div key={index} className="photo-card" style={{
-                    background: theme.card,
-                    borderRadius: theme.radiusSm,
-                    boxShadow: theme.shadow,
-                    padding: '12px',
-                    display: 'flex', alignItems: 'center', gap: '12px',
-                  }}>
-                    <div style={{
-                      width: '52px', height: '52px',
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                      background: '#F1EDE6',
-                      flexShrink: 0,
+                  <div key={index}>
+                    {/* Card row */}
+                    <div className="photo-card" style={{
+                      background: theme.card,
+                      borderRadius: editIndex === index ? `${theme.radiusSm} ${theme.radiusSm} 0 0` : theme.radiusSm,
+                      boxShadow: theme.shadow,
+                      padding: '12px',
+                      display: 'flex', alignItems: 'center', gap: '12px',
                     }}>
-                      {isImageFile(item.url) ? (
-                        <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: theme.inkMuted }}>▶</div>
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        fontSize: '14px', fontWeight: '600', color: theme.ink,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>{item.title}</div>
-                      <div style={{ fontSize: '12px', color: theme.inkMuted, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>{item.date}</span>
-                        <span style={{
-                          background: theme.primarySoft,
-                          color: theme.primary,
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          padding: '1px 7px',
-                          borderRadius: theme.radiusFull,
-                        }}>{folderLabels[item.folderId] || item.folderId}</span>
+                        width: '52px', height: '52px',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        background: '#F1EDE6',
+                        flexShrink: 0,
+                      }}>
+                        {isImageFile(item.url) ? (
+                          <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: theme.inkMuted }}>▶</div>
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}
+                        onClick={() => {
+                          if (editIndex === index) {
+                            setEditIndex(null);
+                            setEditData(null);
+                          } else {
+                            setEditIndex(index);
+                            setEditData({ ...item });
+                          }
+                        }}
+                      >
+                        <div style={{
+                          fontSize: '14px', fontWeight: '600', color: theme.ink,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{item.title}</div>
+                        <div style={{ fontSize: '12px', color: theme.inkMuted, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>{item.date}</span>
+                          <span style={{
+                            background: theme.primarySoft, color: theme.primary,
+                            fontSize: '10px', fontWeight: '600',
+                            padding: '1px 7px', borderRadius: theme.radiusFull,
+                          }}>{folderLabels[item.folderId] || item.folderId}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                        <button onClick={() => {
+                          if (editIndex === index) { setEditIndex(null); setEditData(null); }
+                          else { setEditIndex(index); setEditData({ ...item }); }
+                        }} className="btn-press" style={{
+                          width: '32px', height: '32px',
+                          background: editIndex === index ? theme.primarySoft : theme.borderLight,
+                          border: 'none', borderRadius: '8px',
+                          color: editIndex === index ? theme.primary : theme.inkMuted,
+                          fontSize: '13px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                          </svg>
+                        </button>
+                        <button onClick={() => handleDelete(index)} className="btn-press" style={{
+                          width: '32px', height: '32px',
+                          background: theme.dangerSoft,
+                          border: 'none', borderRadius: '8px',
+                          color: theme.danger, fontSize: '14px',
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          ✕
+                        </button>
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(index)} className="btn-press" style={{
-                      width: '32px', height: '32px',
-                      background: theme.dangerSoft,
-                      border: 'none', borderRadius: '8px',
-                      color: theme.danger, fontSize: '14px',
-                      cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      ✕
-                    </button>
+
+                    {/* Edit panel */}
+                    {editIndex === index && editData && (
+                      <div className="scale-in" style={{
+                        background: theme.card,
+                        borderTop: `1px solid ${theme.border}`,
+                        borderRadius: `0 0 ${theme.radiusSm} ${theme.radiusSm}`,
+                        padding: '14px',
+                        boxShadow: theme.shadow,
+                      }}>
+                        <div style={{ marginBottom: '10px' }}>
+                          <label style={{ fontSize: '11px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '4px' }}>제목</label>
+                          <input type="text" value={editData.title}
+                            onChange={e => setEditData({ ...editData, title: e.target.value })}
+                            className="input-field"
+                            style={{ width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: `1.5px solid ${theme.border}`, background: theme.bg, outline: 'none' }}
+                          />
+                        </div>
+                        <div style={{ marginBottom: '10px' }}>
+                          <label style={{ fontSize: '11px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '4px' }}>날짜</label>
+                          <input type="date" value={editData.date}
+                            onChange={e => setEditData({ ...editData, date: e.target.value })}
+                            className="input-field"
+                            style={{ width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px', border: `1.5px solid ${theme.border}`, background: theme.bg, outline: 'none' }}
+                          />
+                        </div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '11px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>폴더</label>
+                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                            {Object.entries(folderLabels).map(([id, name]) => (
+                              <button key={id} type="button" className="btn-press"
+                                onClick={() => setEditData({ ...editData, folderId: id })}
+                                style={{
+                                  padding: '5px 11px', fontSize: '12px', fontWeight: '500',
+                                  border: 'none', borderRadius: theme.radiusFull, cursor: 'pointer',
+                                  background: editData.folderId === id ? theme.primary : theme.borderLight,
+                                  color: editData.folderId === id ? 'white' : theme.inkSoft,
+                                }}
+                              >{name}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button className="btn-press" onClick={() => { setEditIndex(null); setEditData(null); }}
+                            style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', background: theme.borderLight, color: theme.inkSoft, border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                          >취소</button>
+                          <button className="btn-press" onClick={() => {
+                            if (!editData.title || !editData.date) { showToast('제목과 날짜를 입력해 주세요'); return; }
+                            const updated = [...photos];
+                            updated[index] = editData;
+                            setPhotos(updated);
+                            setEditIndex(null);
+                            setEditData(null);
+                            showToast('수정했어요');
+                          }}
+                            style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', background: theme.primary, color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+                          >수정 완료</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -4,7 +4,7 @@ import Admin from './Admin';
 
 export default function App() {
   // 주소창 뒤에 /admin이 붙어 있으면 관리자 페이지를 보여줍니다.
-  if (window.location.pathname === '/admin') {
+  if (window.location.pathname === '/pej') {
     return <Admin />;
   }
 

@@ -92,6 +92,23 @@ const Styles = () => (
       background-size: 200% 100%;
       animation: shimmer 1.8s ease-in-out infinite;
     }
+
+    .scroll-btn {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+      color: ${t.inkSoft};
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .scroll-btn:active {
+      transform: scale(0.9);
+    }
   `}</style>
 );
 
@@ -361,6 +378,8 @@ function PhotoDetailView({ folder, items, onBack }) {
           </div>
         )}
       </div>
+
+      <ScrollButtons />
     </div>
   );
 }
@@ -445,6 +464,45 @@ function PhotoCard({ item, index }) {
 }
 
 /* ═══════════════════════════════════
+   Scroll Top / Bottom Buttons
+   ═══════════════════════════════════ */
+function ScrollButtons() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 300);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  if (!show) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      right: '16px', bottom: '24px',
+      display: 'flex', flexDirection: 'column', gap: '8px',
+      zIndex: 20,
+    }}>
+      <button className="scroll-btn"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m18 15-6-6-6 6" />
+        </svg>
+      </button>
+      <button className="scroll-btn"
+        onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
    Empty State
    ═══════════════════════════════════ */
 function EmptyState() {
@@ -479,7 +537,6 @@ function EmptyState() {
         color: t.inkMuted,
         marginTop: '4px',
       }}>
-        관리자 페이지에서 사진을 추가해 보세요
       </p>
     </div>
   );
