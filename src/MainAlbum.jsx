@@ -8,26 +8,10 @@ const mockData = {
     { id: 4, name: '3개월', label: '3개월' },
     { id: 5, name: '4개월', label: '4개월' },
     { id: 6, name: '5개월', label: '5개월' },
+    { id: 7, name: '6개월', label: '6개월' },
   ],
   videos: {
-    1: [
-      { id: 101, title: '탄생', date: '2026.01.09', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy3u265OPu_S0WGwUC7rThjurgJ0N1L8K_talkv_high.mp4' },
-      { id: 102, title: '첫 면회', date: '2026.01.10', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5682.jpeg' },
-      { id: 103, title: '조리원 첫 모자동실', date: '2026.01.12', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5727.jpeg' },
-      { id: 104, title: '숙면', date: '2026.01.14', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5817.jpeg' },
-      { id: 105, title: '오~', date: '2026.01.14', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5813.jpeg' },
-      { id: 106, title: '찡긋', date: '2026.01.16', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5859.jpeg' },
-      { id: 107, title: '아빠품에서', date: '2026.01.16', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5872.jpeg' },
-      { id: 108, title: '너무 예쁜 우리 애기', date: '2026.01.17', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5883.jpeg' },
-      { id: 109, title: '미소 천사', date: '2026.01.18', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5901.jpeg' },
-      { id: 110, title: '동글동글', date: '2026.01.22', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5960.jpeg' },
-      { id: 111, title: '초점책 보는 똘망이', date: '2026.01.22', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5955.jpeg' },
-      { id: 112, title: '부릅', date: '2026.01.24', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5987.jpeg' },
-      { id: 113, title: '집으로 처음 온 날', date: '2026.01.25', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_5997.jpeg' },
-      { id: 114, title: 'ㄴ', date: '2026.01.27', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_6008.jpeg' },
-      { id: 115, title: 'ss', date: '2026.01.27', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/%EC%8B%A0%EC%83%9D%EC%95%84/IMG_6039.jpeg' },
-    ],
-    2: [], 3: [], 4: [], 5: [], 6: [],
+    1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [],
   },
 };
 
