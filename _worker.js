@@ -1,51 +1,56 @@
+const ADMIN_PASSWORD = '4547';
+const KV_KEY = 'album-photos';
+const R2_PUBLIC_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    // 1. 관리자 페이지에서 데이터를 저장(POST)하거나 가져올(GET) 때의 주소 처리
-    if (url.pathname === '/functions/api') {
-      
-      // [GET 요청]: 메인 화면이나 관리자 화면에서 기존 저장된 데이터를 불러갈 때
-      if (request.method === 'GET') {
-        // Cloudflare KV에서 'photos'라는 이름으로 저장된 데이터를 꺼내옵니다.
-        // 만약 KV 이름이 다르면 env.ALBUM_KV 부분을 대시보드에 적은 이름으로 바꾸시면 됩니다.
-        const data = await env.ALBUM_KV.get('photos');
-        return new Response(data || '[]', {
-          headers: { 'Content-Type': 'application/json' },
-        });
+    try {
+      if (url.pathname === '/functions/api') {
+        if (request.method === 'GET') return handleGetAlbum(env);
+        if (request.method === 'POST') return handleSaveAlbum(request, env);
       }
 
-      // [POST 요청]: 관리자 페이지에서 [최종 변경사항 서버에 저장하기] 버튼을 눌렀을 때
-      if (request.method === 'POST') {
-        try {
-          const body = await request.json();
-          
-          // 🔐 Admin.jsx에 설정한 비밀번호와 일치하는지 확인합니다.
-          // (만약 Admin.jsx에서 비밀번호를 바꾸셨다면 여기 'YOUR_SECRET_PASSWORD'도 똑같이 맞춰주세요!)
-          if (body.password !== 'YOUR_SECRET_PASSWORD') {
-            return new Response(JSON.stringify({ success: false, error: '비밀번호가 올바르지 않습니다.' }), {
-              status: 401,
-              headers: { 'Content-Type': 'application/json' },
-            });
-          }
-
-          // KV 데이터베이스에 대형 데이터(JSON 문자열)를 통째로 저장합니다.
-          await env.ALBUM_KV.put('photos', JSON.stringify(body.data));
-          
-          return new Response(JSON.stringify({ success: true }), {
-            headers: { 'Content-Type': 'application/json' },
-          });
-        } catch (err) {
-          return new Response(JSON.stringify({ success: false, error: err.message }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          });
-          
-        }
+      if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
+        return handleListPhotos(env);
       }
+    } catch (err) {
+      return Response.json({ error: err.message }, { status: 500 });
     }
 
-    // 2. /functions/api 주소가 아닐 때는 원래 만들었던 한별이 앨범 웹사이트 화면을 그대로 보여줍니다.
     return env.ASSETS.fetch(request);
-  },
+  }
 };
+
+async function handleGetAlbum(env) {
+  const data = await env.ALBUM_KV.get(KV_KEY);
+  return Response.json(data ? JSON.parse(data) : []);
+}
+
+async function handleSaveAlbum(request, env) {
+  const body = await request.json();
+
+  if (body.password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  await env.ALBUM_KV.put(KV_KEY, JSON.stringify(body.data || []));
+  return Response.json({ success: true });
+}
+
+async function handleListPhotos(env) {
+  const listed = await env.PHOTO_BUCKET.list({ limit: 1000 });
+
+  const files = listed.objects
+    .filter(obj => /\.(jpe?g|png|gif|webp|heic|heif|mp4|mov)$/i.test(obj.key))
+    .map(obj => ({
+      key: obj.key,
+      url: R2_PUBLIC_BASE + obj.key.split('/').map(encodeURIComponent).join('/'),
+      uploaded: obj.uploaded,
+      size: obj.size
+    }))
+    .sort((a, b) => new Date(b.uploaded) - new Date(a.uploaded));
+
+  return Response.json(files);
+}

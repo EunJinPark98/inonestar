@@ -1,7 +1,7 @@
-name = "inonestar"
-compatibility_date = "2026-06-20"
+name = "ino-album"
+main = "_worker.js"
+compatibility_date = "2024-09-01"
 
-# [수정된 부분]: 빌드된 파일 폴더와 public 폴더를 모두 포함하라고 지정합니다.
 [assets]
 directory = "./dist"
 binding = "ASSETS"
@@ -9,3 +9,7 @@ binding = "ASSETS"
 [[kv_namespaces]]
 binding = "ALBUM_KV"
 id = "ff7a36162916421abda24e3dccb61427"
+
+[[r2_buckets]]
+binding = "PHOTO_BUCKET"
+bucket_name = "onestar-album"
