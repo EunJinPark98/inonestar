@@ -459,33 +459,31 @@ export default function Admin() {
           />
 
           {/* Title & Date */}
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>제목</label>
-              <input type="text" placeholder="이 순간의 제목"
-                value={newPhoto.title}
-                onChange={e => setNewPhoto({ ...newPhoto, title: e.target.value })}
-                className="input-field"
-                style={{
-                  width: '100%', padding: '11px 12px', fontSize: '14px',
-                  borderRadius: '8px', border: `1.5px solid ${theme.border}`,
-                  background: theme.bg, outline: 'none',
-                }}
-              />
-            </div>
-            <div style={{ flex: '0 0 130px' }}>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>날짜</label>
-              <input type="date"
-                value={newPhoto.date}
-                onChange={e => setNewPhoto({ ...newPhoto, date: e.target.value })}
-                className="input-field"
-                style={{
-                  width: '100%', padding: '11px 10px', fontSize: '14px',
-                  borderRadius: '8px', border: `1.5px solid ${theme.border}`,
-                  background: theme.bg, outline: 'none',
-                }}
-              />
-            </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>제목</label>
+            <input type="text" placeholder="이 순간의 제목"
+              value={newPhoto.title}
+              onChange={e => setNewPhoto({ ...newPhoto, title: e.target.value })}
+              className="input-field"
+              style={{
+                width: '100%', padding: '11px 12px', fontSize: '14px',
+                borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+                background: theme.bg, outline: 'none',
+              }}
+            />
+          </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>날짜</label>
+            <input type="date"
+              value={newPhoto.date}
+              onChange={e => setNewPhoto({ ...newPhoto, date: e.target.value })}
+              className="input-field"
+              style={{
+                width: '100%', padding: '11px 12px', fontSize: '14px',
+                borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+                background: theme.bg, outline: 'none',
+              }}
+            />
           </div>
 
           <button type="button" onClick={handleAddPhoto}

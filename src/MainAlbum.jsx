@@ -11,7 +11,7 @@ const mockData = {
   ],
   videos: {
     1: [
-      { id: 101, title: '1월 9일, 탄생', date: '2026.01.09', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy3u265OPu_S0WGwUC7rThjurgJ0N1L8K_talkv_high.mp4' },
+      { id: 101, title: '탄생', date: '2026.01.09', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/_talkv_wy3u265OPu_S0WGwUC7rThjurgJ0N1L8K_talkv_high.mp4' },
       { id: 102, title: '첫 면회', date: '2026.01.10', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5682.jpeg' },
       { id: 103, title: '조리원 첫 모자동실', date: '2026.01.12', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5727.jpeg' },
       { id: 104, title: '숙면', date: '2026.01.14', url: 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/IMG_5817.jpeg' },
@@ -33,6 +33,11 @@ const mockData = {
 
 const isImage = (url) => /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(url || '');
 
+const parseDate = (d) => new Date((d || '').replace(/\./g, '-'));
+
+const sortByDate = (items) =>
+  [...items].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+
 const t = {
   bg: '#FAF8F5',
   card: '#FFFFFF',
@@ -48,7 +53,6 @@ const t = {
   warm2: '#EDE4DA',
   shadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)',
   shadowMd: '0 4px 16px rgba(0,0,0,0.06)',
-  shadowLg: '0 8px 30px rgba(0,0,0,0.08)',
 };
 
 const Styles = () => (
@@ -68,31 +72,16 @@ const Styles = () => (
 
     .serif { font-family: 'Noto Serif KR', 'Georgia', serif; }
 
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
-    }
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
+      from { opacity: 0; transform: translateY(14px); }
       to   { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateX(20px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
-    @keyframes heroFloat {
-      0%, 100% { transform: translateY(0); }
-      50%      { transform: translateY(-6px); }
     }
     @keyframes shimmer {
       0%   { background-position: -200% 0; }
       100% { background-position: 200% 0; }
     }
 
-    .fade-in  { animation: fadeIn 0.5s ease both; }
     .fade-up  { animation: fadeUp 0.5s ease both; }
-    .slide-in { animation: slideIn 0.4s ease both; }
-    .float    { animation: heroFloat 3.5s ease-in-out infinite; }
 
     .folder-card {
       transition: all 0.2s ease;
@@ -139,7 +128,7 @@ export default function MainAlbum() {
     mockData.folders.forEach(f => {
       const staticItems = mockData.videos[f.id] || [];
       const dynamicItems = photos.filter(item => Number(item.folderId) === f.id);
-      result[f.id] = [...dynamicItems, ...staticItems];
+      result[f.id] = sortByDate([...dynamicItems, ...staticItems]);
     });
     return result;
   }, [photos]);
@@ -153,7 +142,7 @@ export default function MainAlbum() {
     return img ? img.url : null;
   };
 
-  const navigateToFolder = (id) => {
+  const navigate = (id) => {
     setTransitioning(true);
     setTimeout(() => {
       setCurrentFolder(id);
@@ -162,31 +151,21 @@ export default function MainAlbum() {
     }, 150);
   };
 
-  const navigateBack = () => {
-    setTransitioning(true);
-    setTimeout(() => {
-      setCurrentFolder(null);
-      setTransitioning(false);
-      window.scrollTo({ top: 0 });
-    }, 150);
-  };
-
   return (
     <div className="album-root" style={{ opacity: transitioning ? 0 : 1, transition: 'opacity 0.15s ease' }}>
       <Styles />
-
       {currentFolder === null ? (
         <FolderListView
           folders={mockData.folders}
           allFolderItems={allFolderItems}
           getCoverImage={getCoverImage}
-          onSelect={navigateToFolder}
+          onSelect={navigate}
         />
       ) : (
         <PhotoDetailView
           folder={selectedFolder}
           items={currentItems}
-          onBack={navigateBack}
+          onBack={() => navigate(null)}
         />
       )}
     </div>
@@ -201,42 +180,42 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
     <div style={{ maxWidth: '520px', margin: '0 auto' }}>
 
       {/* Hero */}
-      <div className="fade-in" style={{
-        padding: '56px 28px 40px',
+      <div className="fade-up" style={{
+        padding: '60px 28px 44px',
         textAlign: 'center',
-        position: 'relative',
       }}>
-        <div className="float" style={{
-          margin: '0 auto 22px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <StarMark />
-        </div>
-
+        {/* Decorative line accent */}
         <div style={{
-          fontSize: '10px', fontWeight: '600',
-          letterSpacing: '0.25em',
-          color: t.sage,
-          textTransform: 'uppercase',
-          marginBottom: '12px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: '14px', marginBottom: '20px',
         }}>
-          Growth Journal
+          <div style={{ width: '28px', height: '1px', background: t.accent, opacity: 0.4 }} />
+          <div style={{
+            fontSize: '9px', fontWeight: '700',
+            letterSpacing: '0.3em',
+            color: t.accent,
+            textTransform: 'uppercase',
+          }}>
+            Growth Journal
+          </div>
+          <div style={{ width: '28px', height: '1px', background: t.accent, opacity: 0.4 }} />
         </div>
 
         <h1 className="serif" style={{
-          fontSize: '32px',
+          fontSize: '30px',
           fontWeight: '600',
           color: t.ink,
-          lineHeight: 1.3,
-          margin: '0 0 8px',
+          lineHeight: 1.35,
+          margin: '0 0 10px',
         }}>
           한별이 앨범
         </h1>
 
         <p style={{
-          fontSize: '14px',
+          fontSize: '13px',
           color: t.inkMuted,
           lineHeight: 1.6,
+          fontWeight: '400',
         }}>
           사랑하는 우리 딸의 소중한 성장 기록
         </p>
@@ -244,7 +223,7 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
 
       {/* Folder Cards */}
       <div style={{ padding: '0 20px 60px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {folders.map((folder, idx) => {
             const count = (allFolderItems[folder.id] || []).length;
             const cover = getCoverImage(folder.id);
@@ -254,21 +233,21 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
               <div key={folder.id}
                 className="folder-card fade-up"
                 style={{
-                  animationDelay: `${idx * 0.06}s`,
+                  animationDelay: `${idx * 0.05}s`,
                   background: t.card,
-                  borderRadius: '16px',
+                  borderRadius: '14px',
                   boxShadow: t.shadow,
                   overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'stretch',
-                  minHeight: '88px',
+                  minHeight: '80px',
                   border: `1px solid ${t.border}`,
                 }}
                 onClick={() => onSelect(folder.id)}
               >
                 {/* Thumbnail */}
                 <div style={{
-                  width: '88px',
+                  width: '80px',
                   flexShrink: 0,
                   background: cover
                     ? `url(${cover}) center/cover`
@@ -279,39 +258,46 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
                     <div style={{
                       position: 'absolute', inset: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '24px', opacity: 0.3,
-                    }}>📷</div>
+                      color: t.inkMuted, fontSize: '20px', opacity: 0.35,
+                    }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <path d="m21 15-5-5L5 21" />
+                      </svg>
+                    </div>
                   )}
                 </div>
 
                 {/* Info */}
                 <div style={{
                   flex: 1,
-                  padding: '14px 16px',
+                  padding: '13px 14px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
                 }}>
                   <div style={{
-                    fontSize: '11px',
+                    fontSize: '10px',
                     fontWeight: '600',
                     color: hasPhotos ? t.sage : t.inkMuted,
                     letterSpacing: '0.06em',
-                    marginBottom: '4px',
+                    marginBottom: '3px',
+                    textTransform: 'uppercase',
                   }}>
                     {folder.label}
                   </div>
                   <div className="serif" style={{
-                    fontSize: '17px',
+                    fontSize: '16px',
                     fontWeight: '500',
                     color: t.ink,
+                    marginBottom: '3px',
                   }}>
                     {folder.name}
                   </div>
                   <div style={{
-                    fontSize: '12px',
+                    fontSize: '11px',
                     color: t.inkMuted,
-                    marginTop: '4px',
                   }}>
                     {hasPhotos ? `${count}개의 기록` : '아직 기록이 없어요'}
                   </div>
@@ -321,11 +307,12 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  paddingRight: '16px',
+                  paddingRight: '14px',
                   color: t.inkMuted,
-                  fontSize: '18px',
                 }}>
-                  ›
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
                 </div>
               </div>
             );
@@ -356,18 +343,19 @@ function PhotoDetailView({ folder, items, onBack }) {
           gap: '12px',
         }}>
           <button className="back-btn" onClick={onBack} style={{
-            width: '36px', height: '36px',
+            width: '34px', height: '34px',
             background: t.warm1,
             border: 'none',
             borderRadius: '10px',
-            fontSize: '18px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: t.inkSoft,
           }}>
-            ‹
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </button>
           <div>
-            <div className="serif" style={{ fontSize: '16px', fontWeight: '600', color: t.ink }}>
+            <div className="serif" style={{ fontSize: '15px', fontWeight: '600', color: t.ink }}>
               {folder?.name}
             </div>
             <div style={{ fontSize: '11px', color: t.inkMuted }}>
@@ -382,7 +370,7 @@ function PhotoDetailView({ folder, items, onBack }) {
         {items.length === 0 ? (
           <EmptyState />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             {items.map((item, index) => (
               <PhotoCard key={item.id || index} item={item} index={index} />
             ))}
@@ -394,146 +382,81 @@ function PhotoDetailView({ folder, items, onBack }) {
 }
 
 /* ═══════════════════════════════════
-   Photo Card
+   Photo Card — caption on top
    ═══════════════════════════════════ */
 function PhotoCard({ item, index }) {
   const [loaded, setLoaded] = useState(false);
-
   const photo = isImage(item.url);
 
   return (
     <div
       className="photo-entry"
-      style={{ animationDelay: `${index * 0.06}s` }}
+      style={{ animationDelay: `${index * 0.05}s` }}
     >
+      {/* Caption above media */}
+      <div style={{
+        padding: '0 2px 8px',
+      }}>
+        <div style={{
+          fontSize: '11px',
+          fontWeight: '500',
+          color: t.inkMuted,
+          letterSpacing: '0.03em',
+          marginBottom: '3px',
+        }}>
+          {item.date}
+        </div>
+        <div className="serif" style={{
+          fontSize: '16px',
+          fontWeight: '500',
+          color: t.ink,
+          lineHeight: 1.4,
+        }}>
+          {item.title}
+        </div>
+      </div>
+
+      {/* Media */}
       <div style={{
         position: 'relative',
-        background: t.card,
-        borderRadius: '18px',
+        background: t.warm1,
+        borderRadius: '14px',
         overflow: 'hidden',
         boxShadow: t.shadowMd,
+        minHeight: photo ? '200px' : 'auto',
       }}>
-        {/* Media */}
-        <div style={{
-          position: 'relative',
-          background: t.warm1,
-          minHeight: photo ? '220px' : 'auto',
-        }}>
-          {!loaded && photo && (
-            <div className="img-loading" style={{
-              position: 'absolute', inset: 0,
-            }} />
-          )}
+        {!loaded && photo && (
+          <div className="img-loading" style={{
+            position: 'absolute', inset: 0,
+          }} />
+        )}
 
-          {photo ? (
-            <img
-              src={item.url}
-              alt={item.title}
-              onLoad={() => setLoaded(true)}
-              style={{
-                width: '100%',
-                display: 'block',
-                opacity: loaded ? 1 : 0,
-                transition: 'opacity 0.5s ease',
-              }}
-            />
-          ) : (
-            <video
-              src={item.url}
-              controls
-              preload="metadata"
-              playsInline
-              style={{
-                width: '100%',
-                display: 'block',
-              }}
-            />
-          )}
-
-          {/* Overlay caption — only on photos so it doesn't block video controls */}
-          {photo && (
-            <div style={{
-              position: 'absolute',
-              left: 0, right: 0, bottom: 0,
-              padding: '40px 18px 16px',
-              background: 'linear-gradient(to top, rgba(20,16,12,0.78) 0%, rgba(20,16,12,0.35) 55%, transparent 100%)',
+        {photo ? (
+          <img
+            src={item.url}
+            alt={item.title}
+            onLoad={() => setLoaded(true)}
+            style={{
+              width: '100%',
+              display: 'block',
               opacity: loaded ? 1 : 0,
               transition: 'opacity 0.5s ease',
-            }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: 'rgba(255,255,255,0.82)',
-                letterSpacing: '0.08em',
-                marginBottom: '4px',
-                textShadow: '0 1px 3px rgba(0,0,0,0.3)',
-              }}>
-                {item.date}
-              </div>
-              <div className="serif" style={{
-                fontSize: '18px',
-                fontWeight: '500',
-                color: '#fff',
-                lineHeight: 1.4,
-                textShadow: '0 1px 6px rgba(0,0,0,0.4)',
-              }}>
-                {item.title}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Caption below — videos only */}
-        {!photo && (
-          <div style={{ padding: '14px 16px 16px' }}>
-            <div style={{
-              fontSize: '11px',
-              fontWeight: '600',
-              color: t.sage,
-              letterSpacing: '0.06em',
-              marginBottom: '5px',
-            }}>
-              {item.date}
-            </div>
-            <div className="serif" style={{
-              fontSize: '16px',
-              fontWeight: '500',
-              color: t.ink,
-              lineHeight: 1.4,
-            }}>
-              {item.title}
-            </div>
-          </div>
+            }}
+          />
+        ) : (
+          <video
+            src={item.url}
+            controls
+            preload="metadata"
+            playsInline
+            style={{
+              width: '100%',
+              display: 'block',
+            }}
+          />
         )}
       </div>
     </div>
-  );
-}
-
-/* ═══════════════════════════════════
-   Star Mark — refined line emblem
-   ═══════════════════════════════════ */
-function StarMark() {
-  return (
-    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="starGrad" x1="14" y1="8" x2="42" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#C99A6A" />
-          <stop offset="1" stopColor="#B8734A" />
-        </linearGradient>
-      </defs>
-      {/* main four-point sparkle */}
-      <path
-        d="M28 6 C29.5 17.5 33.8 22.5 50 28 C33.8 33.5 29.5 38.5 28 50 C26.5 38.5 22.2 33.5 6 28 C22.2 22.5 26.5 17.5 28 6 Z"
-        fill="url(#starGrad)"
-      />
-      {/* small accent sparkle */}
-      <path
-        d="M44 10 C44.6 13.4 45.8 14.8 49 16 C45.8 17.2 44.6 18.6 44 22 C43.4 18.6 42.2 17.2 39 16 C42.2 14.8 43.4 13.4 44 10 Z"
-        fill="#7C8A6E"
-        opacity="0.85"
-      />
-    </svg>
   );
 }
 
@@ -547,27 +470,30 @@ function EmptyState() {
       padding: '60px 20px',
     }}>
       <div style={{
-        width: '64px', height: '64px',
-        margin: '0 auto 16px',
+        width: '56px', height: '56px',
+        margin: '0 auto 14px',
         background: t.warm1,
-        borderRadius: '18px',
+        borderRadius: '14px',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '28px', opacity: 0.6,
+        color: t.inkMuted,
       }}>
-        📷
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="m21 15-5-5L5 21" />
+        </svg>
       </div>
       <p className="serif" style={{
-        fontSize: '16px',
+        fontSize: '15px',
         color: t.inkSoft,
-        fontWeight: '400',
         lineHeight: 1.6,
       }}>
         아직 기록된 순간이 없어요
       </p>
       <p style={{
-        fontSize: '13px',
+        fontSize: '12px',
         color: t.inkMuted,
-        marginTop: '6px',
+        marginTop: '4px',
       }}>
         관리자 페이지에서 사진을 추가해 보세요
       </p>
