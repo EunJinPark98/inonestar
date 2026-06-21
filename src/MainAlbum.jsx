@@ -114,6 +114,7 @@ const Styles = () => (
 
 export default function MainAlbum() {
   const [currentFolder, setCurrentFolder] = useState(null);
+  const [page, setPage] = useState('album');
   const [photos, setPhotos] = useState([]);
   const [covers, setCovers] = useState({});
   const [transitioning, setTransitioning] = useState(false);
@@ -158,15 +159,28 @@ export default function MainAlbum() {
     }, 150);
   };
 
+  const goToPage = (p) => {
+    setTransitioning(true);
+    setTimeout(() => {
+      setPage(p);
+      setCurrentFolder(null);
+      setTransitioning(false);
+      window.scrollTo({ top: 0 });
+    }, 150);
+  };
+
   return (
     <div className="album-root" style={{ opacity: transitioning ? 0 : 1, transition: 'opacity 0.15s ease' }}>
       <Styles />
-      {currentFolder === null ? (
+      {page === 'letters' ? (
+        <LettersView onBack={() => goToPage('album')} />
+      ) : currentFolder === null ? (
         <FolderListView
           folders={mockData.folders}
           allFolderItems={allFolderItems}
           getCoverImage={getCoverImage}
           onSelect={navigate}
+          onLetters={() => goToPage('letters')}
         />
       ) : (
         <PhotoDetailView
@@ -182,7 +196,7 @@ export default function MainAlbum() {
 /* ═══════════════════════════════════
    Folder List (Home)
    ═══════════════════════════════════ */
-function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
+function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLetters }) {
   return (
     <div style={{ maxWidth: '520px', margin: '0 auto' }}>
 
@@ -224,7 +238,7 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
           lineHeight: 1.6,
           fontWeight: '400',
         }}>
-          사랑하는 우리 딸의 소중한 성장 기록
+          사랑하는 우리 딸 한별이의 소중한 성장 기록
         </p>
       </div>
 
@@ -325,6 +339,41 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect }) {
             );
           })}
         </div>
+
+        {/* Letters button */}
+        <div style={{
+          marginTop: '48px',
+          paddingTop: '32px',
+          borderTop: `1px solid ${t.border}`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+        }}>
+          <button className="folder-card" onClick={onLetters} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px',
+            padding: '8px 20px',
+          }}>
+            <div style={{
+              width: '56px', height: '56px',
+              borderRadius: '16px',
+              background: `linear-gradient(145deg, ${t.warm1} 0%, ${t.warm2} 100%)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.06)',
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={t.accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              </svg>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div className="serif" style={{ fontSize: '15px', fontWeight: '500', color: t.ink }}>
+                한별이 편지함
+              </div>
+              <div style={{ fontSize: '11px', color: t.inkMuted, marginTop: '3px' }}>
+                사랑하는 마음을 남겨보세요
+              </div>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -377,7 +426,7 @@ function PhotoDetailView({ folder, items, onBack }) {
         {items.length === 0 ? (
           <EmptyState />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {items.map((item, index) => (
               <PhotoCard key={item.id || index} item={item} index={index} />
             ))}
@@ -602,6 +651,287 @@ function EmptyState() {
         marginTop: '4px',
       }}>
       </p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
+   Letters View
+   ═══════════════════════════════════ */
+function LettersView({ onBack }) {
+  const [letters, setLetters] = useState([]);
+  const [author, setAuthor] = useState('');
+  const [content, setContent] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [toast, setToast] = useState('');
+
+  useEffect(() => {
+    fetch('/functions/api/letters')
+      .then(res => res.json())
+      .then(data => setLetters(data || []))
+      .catch(() => {});
+  }, []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!author.trim() || !content.trim()) {
+      showToast('이름과 내용을 모두 입력해 주세요');
+      return;
+    }
+
+    setSending(true);
+    try {
+      const res = await fetch('/functions/api/letters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author: author.trim(), content: content.trim(), private: isPrivate })
+      });
+      const result = await res.json();
+      if (result.success) {
+        setLetters([{ id: Date.now(), author: author.trim(), content: content.trim(), private: isPrivate, date: new Date().toISOString().split('T')[0] }, ...letters]);
+        setContent('');
+        setIsPrivate(false);
+        showToast('편지를 남겼어요');
+      }
+    } catch (_) {
+      showToast('오류가 발생했어요');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '520px', margin: '0 auto' }}>
+
+      {/* Header */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 10,
+        background: 'rgba(250,248,245,0.88)',
+        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: `1px solid ${t.border}`,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          padding: '12px 16px', gap: '12px',
+        }}>
+          <button className="back-btn" onClick={onBack} style={{
+            width: '34px', height: '34px',
+            background: t.warm1, border: 'none', borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: t.inkSoft,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <div>
+            <div className="serif" style={{ fontSize: '15px', fontWeight: '600', color: t.ink }}>
+              한별이에게 쓰는 편지
+            </div>
+            <div style={{ fontSize: '11px', color: t.inkMuted }}>
+              {letters.length}개의 편지
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: '20px 16px 60px' }}>
+
+        {/* Write form */}
+        <div className="fade-up" style={{
+          background: t.card,
+          borderRadius: '14px',
+          boxShadow: t.shadow,
+          border: `1px solid ${t.border}`,
+          padding: '18px',
+          marginBottom: '24px',
+        }}>
+          <div className="serif" style={{
+            fontSize: '15px', fontWeight: '500', color: t.ink,
+            marginBottom: '14px',
+          }}>
+            편지 쓰기
+          </div>
+          <form onSubmit={handleSubmit}>
+            <input
+              type="text"
+              placeholder="보내는 사람 (예: 엄마, 아빠, 할머니)"
+              value={author}
+              onChange={e => setAuthor(e.target.value)}
+              style={{
+                width: '100%', padding: '11px 12px', fontSize: '14px',
+                borderRadius: '8px', border: `1.5px solid ${t.border}`,
+                background: t.bg, outline: 'none', marginBottom: '10px',
+                boxSizing: 'border-box',
+                fontFamily: 'inherit',
+              }}
+            />
+            <textarea
+              placeholder="한별이에게 하고 싶은 말을 적어보세요..."
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              rows={4}
+              style={{
+                width: '100%', padding: '11px 12px', fontSize: '14px',
+                borderRadius: '8px', border: `1.5px solid ${t.border}`,
+                background: t.bg, outline: 'none', marginBottom: '12px',
+                boxSizing: 'border-box', resize: 'vertical',
+                fontFamily: 'inherit', lineHeight: 1.6,
+              }}
+            />
+            {/* Public / Private toggle */}
+            <div style={{
+              display: 'flex', gap: '8px', marginBottom: '12px',
+            }}>
+              <button type="button" onClick={() => setIsPrivate(false)} style={{
+                flex: 1, padding: '10px', fontSize: '13px', fontWeight: '500',
+                background: !isPrivate ? t.card : t.bg,
+                border: `1.5px solid ${!isPrivate ? t.accent : t.border}`,
+                color: !isPrivate ? t.accent : t.inkMuted,
+                borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit',
+                transition: 'all 0.15s ease',
+              }}>
+                전체 공개
+              </button>
+              <button type="button" onClick={() => setIsPrivate(true)} style={{
+                flex: 1, padding: '10px', fontSize: '13px', fontWeight: '500',
+                background: isPrivate ? t.card : t.bg,
+                border: `1.5px solid ${isPrivate ? t.sage : t.border}`,
+                color: isPrivate ? t.sage : t.inkMuted,
+                borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit',
+                transition: 'all 0.15s ease',
+              }}>
+                🔒 한별이만 보기
+              </button>
+            </div>
+
+            <button type="submit" disabled={sending}
+              style={{
+                width: '100%', padding: '13px',
+                fontSize: '14px', fontWeight: '600',
+                background: (author.trim() && content.trim() && !sending) ? t.accent : t.border,
+                color: (author.trim() && content.trim() && !sending) ? 'white' : t.inkMuted,
+                border: 'none', borderRadius: '10px',
+                cursor: (author.trim() && content.trim() && !sending) ? 'pointer' : 'default',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {sending ? '보내는 중...' : '편지 남기기'}
+            </button>
+          </form>
+        </div>
+
+        {/* Letters list */}
+        {letters.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '48px 20px',
+          }}>
+            <div style={{ fontSize: '28px', marginBottom: '10px', opacity: 0.5 }}>✉️</div>
+            <p className="serif" style={{ fontSize: '15px', color: t.inkSoft }}>
+              아직 편지가 없어요
+            </p>
+            <p style={{ fontSize: '12px', color: t.inkMuted, marginTop: '4px' }}>
+              첫 번째 편지를 남겨보세요
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {letters.map((letter, idx) => (
+              <div key={letter.id || idx} className="fade-up" style={{
+                animationDelay: `${idx * 0.04}s`,
+                background: t.card,
+                borderRadius: '14px',
+                boxShadow: t.shadow,
+                border: `1px solid ${t.border}`,
+                padding: '18px',
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginBottom: '10px',
+                }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                  }}>
+                    <div style={{
+                      width: '30px', height: '30px',
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${t.accentSoft} 0%, ${t.sageSoft} 100%)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '13px', fontWeight: '700', color: t.accent,
+                    }}>
+                      {letter.author.charAt(0)}
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: t.ink }}>
+                      {letter.author}
+                    </span>
+                    {letter.private && (
+                      <span style={{ fontSize: '10px', color: t.sage, background: t.sageSoft, padding: '2px 7px', borderRadius: '9999px', fontWeight: '600' }}>
+                        🔒 비공개
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '11px', color: t.inkMuted }}>
+                    {letter.date}
+                  </span>
+                </div>
+                {letter.private ? (
+                  <div style={{
+                    fontSize: '13px', color: t.inkMuted,
+                    fontStyle: 'italic', lineHeight: 1.6,
+                    padding: '12px 0 4px',
+                  }}>
+                    🔒 한별이만 볼 수 있는 편지예요
+                  </div>
+                ) : (
+                  <div className="serif" style={{
+                    fontSize: '14px',
+                    color: t.ink,
+                    lineHeight: 1.8,
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {letter.content}
+                  </div>
+                )}
+                <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                  <button onClick={() => {
+                    alert('관리자만 삭제할 수 있습니다.\n삭제를 원하시면 한별이 엄마에게 문의해주세요.');
+                  }} style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: '11px', color: t.inkMuted, padding: '4px 0',
+                    fontFamily: 'inherit',
+                  }}>
+                    삭제
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {toast && (
+        <div className="fade-up" style={{
+          position: 'fixed', bottom: '32px', left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(28,25,23,0.88)',
+          backdropFilter: 'blur(8px)',
+          color: 'white', padding: '12px 24px',
+          borderRadius: '9999px', fontSize: '13px', fontWeight: '500',
+          zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          whiteSpace: 'nowrap',
+        }}>
+          {toast}
+        </div>
+      )}
+
+      <ScrollButtons />
     </div>
   );
 }

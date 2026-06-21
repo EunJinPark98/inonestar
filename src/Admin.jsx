@@ -108,6 +108,7 @@ export default function Admin() {
   const [editIndex, setEditIndex] = useState(null);
   const [editData, setEditData] = useState(null);
   const [covers, setCovers] = useState({});
+  const [adminLetters, setAdminLetters] = useState([]);
 
   const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1' });
   const [uploading, setUploading] = useState(false);
@@ -124,6 +125,10 @@ export default function Admin() {
     fetch('/functions/api/covers')
       .then(res => res.json())
       .then(data => setCovers(data || {}))
+      .catch(() => {});
+    fetch('/functions/api/letters')
+      .then(res => res.json())
+      .then(data => setAdminLetters(data || []))
       .catch(() => {});
   }, []);
 
@@ -316,7 +321,7 @@ export default function Admin() {
       }}>
         <div>
           <h1 style={{ fontSize: '17px', fontWeight: '700', color: theme.ink, margin: 0 }}>
-            {view === 'register' ? '앨범 관리' : '등록 목록'}
+            {view === 'register' ? '앨범 관리' : view === 'list' ? '등록 목록' : '편지 관리'}
           </h1>
           <p style={{ fontSize: '11px', color: theme.inkMuted, margin: '2px 0 0' }}>
             {photos.length}개 등록됨
@@ -569,8 +574,42 @@ export default function Admin() {
                 </svg>
               </div>
             </button>
+
+            {/* ── Go to letters button ── */}
+            <button
+              type="button"
+              className="btn-press"
+              onClick={() => { setView('letters'); window.scrollTo({ top: 0 }); }}
+              style={{
+                width: '100%', marginTop: '8px',
+                padding: '15px',
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: theme.radiusSm,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                boxShadow: theme.shadow,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '16px' }}>✉️</span>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: theme.ink }}>편지 관리</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  fontSize: '12px', fontWeight: '700', color: theme.primary,
+                  background: theme.primarySoft,
+                  padding: '2px 10px', borderRadius: theme.radiusFull,
+                }}>
+                  {adminLetters.length}
+                </span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.inkMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+            </button>
           </>
-        ) : (
+        ) : view === 'list' ? (
           <>
             {/* ── List View ── */}
             <button
@@ -771,6 +810,90 @@ export default function Admin() {
                         </div>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* ── Letters View ── */}
+            <button
+              type="button"
+              className="btn-press"
+              onClick={() => { setView('register'); window.scrollTo({ top: 0 }); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: '0 0 14px', color: theme.inkSoft, fontSize: '14px', fontWeight: '500',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              사진 등록으로 돌아가기
+            </button>
+
+            {adminLetters.length === 0 ? (
+              <div style={{
+                background: theme.card,
+                borderRadius: theme.radius,
+                boxShadow: theme.shadow,
+                padding: '48px 20px',
+                textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '10px', opacity: 0.4 }}>✉️</div>
+                <p style={{ fontSize: '13px', color: theme.inkMuted, margin: 0, lineHeight: 1.6 }}>
+                  아직 편지가 없어요
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {adminLetters.map((letter, idx) => (
+                  <div key={letter.id || idx} style={{
+                    background: theme.card,
+                    borderRadius: theme.radiusSm,
+                    boxShadow: theme.shadow,
+                    padding: '14px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: theme.ink }}>{letter.author}</span>
+                        {letter.private && (
+                          <span style={{ fontSize: '10px', color: theme.success, background: theme.successSoft, padding: '2px 7px', borderRadius: theme.radiusFull, fontWeight: '600' }}>
+                            🔒 비공개
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '11px', color: theme.inkMuted }}>{letter.date}</span>
+                        <button className="btn-press" onClick={async () => {
+                          if (!window.confirm('이 편지를 삭제하시겠습니까?')) return;
+                          try {
+                            await fetch('/functions/api/letters/delete', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ password, id: letter.id })
+                            });
+                            setAdminLetters(adminLetters.filter(l => l.id !== letter.id));
+                            showToast('편지를 삭제했어요');
+                          } catch (_) {
+                            showToast('삭제 실패');
+                          }
+                        }} style={{
+                          width: '28px', height: '28px',
+                          background: theme.dangerSoft, border: 'none', borderRadius: '6px',
+                          color: theme.danger, fontSize: '12px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>✕</button>
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: '13px', color: theme.ink,
+                      lineHeight: 1.7, whiteSpace: 'pre-wrap',
+                    }}>
+                      {letter.content}
+                    </div>
                   </div>
                 ))}
               </div>

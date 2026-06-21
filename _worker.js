@@ -1,6 +1,7 @@
 const ADMIN_PASSWORD = '4547';
 const KV_KEY = 'album-photos';
 const COVERS_KEY = 'folder-covers';
+const LETTERS_KEY = 'letters';
 const R2_PUBLIC_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
 
 export default {
@@ -24,6 +25,15 @@ export default {
       if (url.pathname === '/functions/api/covers') {
         if (request.method === 'GET') return handleGetCovers(env);
         if (request.method === 'POST') return handleSaveCovers(request, env);
+      }
+
+      if (url.pathname === '/functions/api/letters') {
+        if (request.method === 'GET') return handleGetLetters(env);
+        if (request.method === 'POST') return handleAddLetter(request, env);
+      }
+
+      if (url.pathname === '/functions/api/letters/delete' && request.method === 'POST') {
+        return handleDeleteLetter(request, env);
       }
 
       if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
@@ -106,6 +116,45 @@ async function handleDeleteFile(request, env) {
 
   const key = decodeURIComponent(body.url.replace(R2_PUBLIC_BASE, ''));
   await env.PHOTO_BUCKET.delete(key);
+  return Response.json({ success: true });
+}
+
+async function handleGetLetters(env) {
+  const data = await env.ALBUM_KV.get(LETTERS_KEY);
+  return Response.json(data ? JSON.parse(data) : []);
+}
+
+async function handleAddLetter(request, env) {
+  const body = await request.json();
+  if (!body.author || !body.content) {
+    return Response.json({ success: false, error: '이름과 내용을 입력해 주세요.' }, { status: 400 });
+  }
+
+  const data = await env.ALBUM_KV.get(LETTERS_KEY);
+  const letters = data ? JSON.parse(data) : [];
+
+  letters.unshift({
+    id: Date.now(),
+    author: body.author,
+    content: body.content,
+    private: !!body.private,
+    date: new Date().toISOString().split('T')[0],
+  });
+
+  await env.ALBUM_KV.put(LETTERS_KEY, JSON.stringify(letters));
+  return Response.json({ success: true });
+}
+
+async function handleDeleteLetter(request, env) {
+  const body = await request.json();
+  if (body.password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  const data = await env.ALBUM_KV.get(LETTERS_KEY);
+  const letters = data ? JSON.parse(data) : [];
+  const filtered = letters.filter(l => l.id !== body.id);
+  await env.ALBUM_KV.put(LETTERS_KEY, JSON.stringify(filtered));
   return Response.json({ success: true });
 }
 
