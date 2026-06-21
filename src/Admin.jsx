@@ -1,5 +1,101 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+const theme = {
+  bg: '#F5F3EF',
+  card: '#FFFFFF',
+  primary: '#C4633A',
+  primarySoft: '#F3E0D5',
+  success: '#5A9A6E',
+  successSoft: '#E6F2EA',
+  ink: '#1C1917',
+  inkSoft: '#78716C',
+  inkMuted: '#A8A29E',
+  border: '#E7E5E4',
+  borderLight: '#F5F3EF',
+  danger: '#DC5F5F',
+  dangerSoft: '#FEF2F2',
+  shadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+  shadowMd: '0 4px 12px rgba(0,0,0,0.08)',
+  shadowLg: '0 8px 24px rgba(0,0,0,0.10)',
+  radius: '14px',
+  radiusSm: '10px',
+  radiusFull: '9999px',
+};
+
+const AdminStyles = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    .admin-root {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .admin-root input, .admin-root select, .admin-root button {
+      font-family: inherit;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.5; }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    .fade-up   { animation: fadeUp 0.35s ease-out both; }
+    .scale-in  { animation: scaleIn 0.3s ease-out both; }
+    .pulse     { animation: pulse 1.5s ease-in-out infinite; }
+    .spin      { animation: spin 0.8s linear infinite; }
+
+    .upload-area {
+      transition: all 0.2s ease;
+    }
+    .upload-area:active {
+      transform: scale(0.98);
+      background: ${theme.primarySoft} !important;
+    }
+
+    .photo-card {
+      transition: all 0.2s ease;
+    }
+    .photo-card:active {
+      transform: scale(0.98);
+    }
+
+    .btn-press {
+      transition: all 0.15s ease;
+    }
+    .btn-press:active {
+      transform: scale(0.97);
+    }
+
+    .input-field {
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .input-field:focus {
+      border-color: ${theme.primary} !important;
+      box-shadow: 0 0 0 3px ${theme.primarySoft} !important;
+      outline: none;
+    }
+
+    .admin-root input[type="date"]::-webkit-calendar-picker-indicator {
+      opacity: 0.5;
+    }
+  `}</style>
+);
+
 export default function Admin() {
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -8,14 +104,21 @@ export default function Admin() {
   const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1' });
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetch('/functions/api')
       .then(res => res.json())
       .then(data => setPhotos(data || []))
-      .catch(err => console.error("데이터 로드 실패:", err));
+      .catch(() => {});
   }, []);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
 
   const isImageFile = (url) => /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(url || '');
 
@@ -24,7 +127,7 @@ export default function Admin() {
     if (password === '4547') {
       setIsLoggedIn(true);
     } else {
-      alert('비밀번호가 틀렸습니다.');
+      showToast('비밀번호가 틀렸어요');
     }
   };
 
@@ -40,20 +143,17 @@ export default function Admin() {
       formData.append('file', file);
       formData.append('password', password);
 
-      const res = await fetch('/functions/api/upload', {
-        method: 'POST',
-        body: formData
-      });
+      const res = await fetch('/functions/api/upload', { method: 'POST', body: formData });
       const result = await res.json();
 
       if (result.success) {
         setNewPhoto(prev => ({ ...prev, url: result.url }));
       } else {
-        alert('업로드 실패: ' + result.error);
+        showToast('업로드 실패: ' + result.error);
         setPreviewUrl('');
       }
     } catch (err) {
-      alert('업로드 오류: ' + err.message);
+      showToast('업로드 오류가 발생했어요');
       setPreviewUrl('');
     } finally {
       setUploading(false);
@@ -63,7 +163,7 @@ export default function Admin() {
   const handleAddPhoto = (e) => {
     e.preventDefault();
     if (!newPhoto.url || !newPhoto.title || !newPhoto.date) {
-      alert('사진을 올리고, 제목/날짜를 모두 입력해 주세요.');
+      showToast('사진, 제목, 날짜를 모두 입력해 주세요');
       return;
     }
 
@@ -72,15 +172,15 @@ export default function Admin() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl('');
     if (fileInputRef.current) fileInputRef.current.value = '';
+    showToast('목록에 추가했어요');
   };
 
   const handleDelete = (index) => {
-    if (window.confirm('이 사진을 리스트에서 삭제하시겠습니까?')) {
-      setPhotos(photos.filter((_, i) => i !== index));
-    }
+    setPhotos(photos.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       const response = await fetch('/functions/api', {
         method: 'POST',
@@ -89,169 +189,435 @@ export default function Admin() {
       });
       const result = await response.json();
       if (result.success) {
-        alert('저장되었습니다! ✨');
+        showToast('저장 완료!');
       } else {
-        alert('저장 실패: ' + result.error);
+        showToast('저장 실패: ' + result.error);
       }
     } catch (err) {
-      alert('오류: ' + err.message);
+      showToast('오류가 발생했어요');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const getFolderName = (id) => {
-    const folderNames = {
-      '1': '0개월 (신생아)', '2': '1개월', '3': '2개월',
-      '4': '3개월', '5': '4개월', '6': '5개월'
-    };
-    return folderNames[id] || `${id}개월`;
+  const folderLabels = {
+    '1': '신생아', '2': '1개월', '3': '2개월',
+    '4': '3개월', '5': '4개월', '6': '5개월'
   };
 
+  // ─── Login ───
   if (!isLoggedIn) {
     return (
-      <div style={{ padding: '80px 20px', textAlign: 'center', fontFamily: 'sans-serif', background: '#FAF6F0', minHeight: '100vh', boxSizing: 'border-box' }}>
-        <h2 style={{ color: '#2B2622', marginBottom: '8px' }}>🔒 한별이 앨범 관리자</h2>
-        <p style={{ color: '#756B5F', fontSize: '14px', marginBottom: '24px' }}>휴대폰으로 사진과 글을 관리합니다.</p>
-        <form onSubmit={handleLogin}>
-          <input
-            type="password"
-            placeholder="비밀번호 입력"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ padding: '14px', fontSize: '16px', width: '85%', maxWidth: '300px', borderRadius: '8px', border: '1px solid #E4DCCC', boxSizing: 'border-box', outline: 'none' }}
-          />
-          <br /><br />
-          <button type="submit" style={{ padding: '14px', fontSize: '16px', width: '85%', maxWidth: '300px', backgroundColor: '#B8633F', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-            로그인
-          </button>
-        </form>
+      <div className="admin-root" style={{
+        background: `linear-gradient(160deg, ${theme.bg} 0%, #EDE8E0 100%)`,
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+      }}>
+        <AdminStyles />
+        <div className="fade-up" style={{
+          background: theme.card,
+          borderRadius: '20px',
+          padding: '40px 28px',
+          width: '100%',
+          maxWidth: '360px',
+          boxShadow: theme.shadowLg,
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: '56px', height: '56px',
+            background: theme.primarySoft,
+            borderRadius: '16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 20px',
+            fontSize: '24px',
+          }}>
+            🔐
+          </div>
+          <h1 style={{ fontSize: '20px', fontWeight: '700', color: theme.ink, margin: '0 0 6px' }}>
+            한별이 앨범
+          </h1>
+          <p style={{ fontSize: '13px', color: theme.inkMuted, margin: '0 0 28px' }}>
+            관리자 비밀번호를 입력해 주세요
+          </p>
+          <form onSubmit={handleLogin}>
+            <input
+              type="password"
+              placeholder="비밀번호"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input-field"
+              style={{
+                width: '100%', padding: '14px 16px', fontSize: '16px',
+                borderRadius: theme.radiusSm, border: `1.5px solid ${theme.border}`,
+                background: theme.bg, outline: 'none',
+                textAlign: 'center', letterSpacing: '4px',
+              }}
+            />
+            <button type="submit" className="btn-press" style={{
+              width: '100%', padding: '14px', marginTop: '14px',
+              fontSize: '15px', fontWeight: '600',
+              background: theme.primary, color: 'white',
+              border: 'none', borderRadius: theme.radiusSm,
+              cursor: 'pointer',
+            }}>
+              로그인
+            </button>
+          </form>
+        </div>
+
+        {toast && <Toast message={toast} />}
       </div>
     );
   }
 
+  // ─── Main ───
   return (
-    <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto', fontFamily: 'sans-serif', background: '#FAF6F0', minHeight: '100vh', boxSizing: 'border-box', color: '#2B2622' }}>
-      <h2 style={{ fontSize: '22px', textAlign: 'center', margin: '10px 0 20px', color: '#2B2622' }}>📱 앨범 관리 페이지</h2>
+    <div className="admin-root" style={{
+      background: theme.bg,
+      minHeight: '100vh',
+      paddingBottom: '100px',
+    }}>
+      <AdminStyles />
 
-      <button onClick={handleSave} style={{ width: '100%', padding: '16px', backgroundColor: '#7C8A6E', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', marginBottom: '24px', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-        💾 최종 변경사항 서버에 저장하기
-      </button>
-
-      <div style={{ background: '#FFFFFF', padding: '20px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #E4DCCC' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '17px', color: '#B8633F' }}>✨ 새로운 순간 기록하기</h3>
-
-        <label style={{ display: 'block', margin: '12px 0 6px', fontSize: '14px', fontWeight: '600' }}>1. 앨범 폴더 선택</label>
-        <select
-          value={newPhoto.folderId}
-          onChange={e => setNewPhoto({ ...newPhoto, folderId: e.target.value })}
-          style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #E4DCCC', fontSize: '15px', background: '#fff', color: '#2B2622' }}
-        >
-          <option value="1">0개월 (신생아)</option>
-          <option value="2">1개월</option>
-          <option value="3">2개월</option>
-          <option value="4">3개월</option>
-          <option value="5">4개월</option>
-          <option value="6">5개월</option>
-        </select>
-
-        <label style={{ display: 'block', margin: '16px 0 6px', fontSize: '14px', fontWeight: '600' }}>2. 사진/영상 올리기</label>
-
-        {previewUrl ? (
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ position: 'relative', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E4DCCC', background: '#f1ece3' }}>
-              {isImageFile(newPhoto.url || previewUrl) || previewUrl.startsWith('blob:') ? (
-                <img src={previewUrl} alt="미리보기" style={{ width: '100%', maxHeight: '300px', objectFit: 'contain', display: 'block' }} />
-              ) : (
-                <video src={previewUrl} controls style={{ width: '100%', maxHeight: '300px', display: 'block' }} />
-              )}
-              {uploading && (
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '15px', fontWeight: 'bold' }}>
-                  업로드 중...
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                URL.revokeObjectURL(previewUrl);
-                setPreviewUrl('');
-                setNewPhoto(prev => ({ ...prev, url: '' }));
-                if (fileInputRef.current) fileInputRef.current.value = '';
-              }}
-              style={{ marginTop: '8px', padding: '8px 16px', fontSize: '13px', background: '#FAF6F0', color: '#B8633F', border: '1px solid #E4DCCC', borderRadius: '4px', cursor: 'pointer' }}
-            >
-              다른 사진 선택
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ width: '100%', padding: '28px 16px', background: '#FAF6F0', border: '2px dashed #D9CFC2', borderRadius: '8px', cursor: 'pointer', fontSize: '15px', color: '#756B5F', fontWeight: '500' }}
-          >
-            📷 사진 또는 영상 선택하기
-          </button>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,video/*"
-          onChange={handleFileSelect}
-          style={{ display: 'none' }}
-        />
-
-        <form onSubmit={handleAddPhoto}>
-          <label style={{ display: 'block', margin: '16px 0 6px', fontSize: '14px', fontWeight: '600' }}>3. 제목 (Title)</label>
-          <input
-            type="text"
-            placeholder="예: 조리원 첫 모자동실"
-            value={newPhoto.title}
-            onChange={e => setNewPhoto({ ...newPhoto, title: e.target.value })}
-            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #E4DCCC', boxSizing: 'border-box', fontSize: '14px' }}
-          />
-
-          <label style={{ display: 'block', margin: '12px 0 6px', fontSize: '14px', fontWeight: '600' }}>4. 날짜 (Date)</label>
-          <input
-            type="date"
-            value={newPhoto.date}
-            onChange={e => setNewPhoto({ ...newPhoto, date: e.target.value })}
-            style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #E4DCCC', boxSizing: 'border-box', fontSize: '14px' }}
-          />
-
-          <button type="submit" disabled={!newPhoto.url || uploading} style={{ width: '100%', marginTop: '20px', padding: '12px', backgroundColor: (newPhoto.url && !uploading) ? '#B8633F' : '#D9CFC2', color: 'white', border: 'none', borderRadius: '6px', fontSize: '15px', fontWeight: 'bold', cursor: (newPhoto.url && !uploading) ? 'pointer' : 'not-allowed' }}>
-            ➕ 아래 목록에 임시 추가
-          </button>
-        </form>
+      {/* Header */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 10,
+        background: 'rgba(245,243,239,0.85)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${theme.border}`,
+        padding: '14px 20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div>
+          <h1 style={{ fontSize: '17px', fontWeight: '700', color: theme.ink, margin: 0 }}>
+            앨범 관리
+          </h1>
+          <p style={{ fontSize: '11px', color: theme.inkMuted, margin: '2px 0 0' }}>
+            {photos.length}개 등록됨
+          </p>
+        </div>
+        <button onClick={handleSave} disabled={saving} className="btn-press" style={{
+          padding: '9px 18px',
+          fontSize: '13px', fontWeight: '600',
+          background: theme.success, color: 'white',
+          border: 'none', borderRadius: theme.radiusFull,
+          cursor: 'pointer', opacity: saving ? 0.6 : 1,
+          display: 'flex', alignItems: 'center', gap: '6px',
+        }}>
+          {saving ? (
+            <span className="spin" style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%' }} />
+          ) : null}
+          {saving ? '저장 중' : '저장'}
+        </button>
       </div>
 
-      <h3 style={{ fontSize: '16px', margin: '0 0 12px 4px', color: '#756B5F' }}>
-        🖼️ 등록 예정 목록 ({photos.length}개)
-      </h3>
-      <div style={{ background: '#FFFFFF', borderRadius: '8px', border: '1px solid #E4DCCC', overflow: 'hidden' }}>
-        {photos.length === 0 ? (
-          <div style={{ padding: '30px', textAlign: 'center', color: '#756B5F', fontSize: '14px' }}>
-            아직 등록한 내역이 없습니다.
+      <div style={{ padding: '16px 16px 0' }}>
+
+        {/* ── Upload Card ── */}
+        <div className="fade-up" style={{
+          background: theme.card,
+          borderRadius: theme.radius,
+          boxShadow: theme.shadow,
+          padding: '20px',
+          marginBottom: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '18px' }}>
+            <div style={{
+              width: '28px', height: '28px',
+              background: theme.primarySoft, borderRadius: '8px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '14px',
+            }}>✨</div>
+            <span style={{ fontSize: '15px', fontWeight: '600', color: theme.ink }}>새 사진 등록</span>
           </div>
-        ) : (
-          photos.map((item, index) => (
-            <div key={index} style={{ display: 'flex', alignItems: 'center', padding: '12px', borderBottom: index === photos.length - 1 ? 'none' : '1px solid #E4DCCC', justifyContent: 'space-between' }}>
-              <div style={{ width: '50px', height: '50px', background: '#f1ece3', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {isImageFile(item.url) ? (
-                  <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+
+          {/* Folder */}
+          <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px', letterSpacing: '0.02em' }}>
+            폴더
+          </label>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
+            {Object.entries(folderLabels).map(([id, name]) => (
+              <button key={id} type="button" className="btn-press"
+                onClick={() => setNewPhoto(prev => ({ ...prev, folderId: id }))}
+                style={{
+                  padding: '7px 14px', fontSize: '13px', fontWeight: '500',
+                  border: 'none', borderRadius: theme.radiusFull, cursor: 'pointer',
+                  background: newPhoto.folderId === id ? theme.primary : theme.borderLight,
+                  color: newPhoto.folderId === id ? 'white' : theme.inkSoft,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+
+          {/* Photo Upload */}
+          <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px', letterSpacing: '0.02em' }}>
+            사진 / 영상
+          </label>
+
+          {previewUrl ? (
+            <div className="scale-in" style={{ marginBottom: '16px' }}>
+              <div style={{
+                position: 'relative',
+                borderRadius: theme.radiusSm,
+                overflow: 'hidden',
+                background: '#F1EDE6',
+              }}>
+                {isImageFile(newPhoto.url || previewUrl) || previewUrl.startsWith('blob:') ? (
+                  <img src={previewUrl} alt="" style={{
+                    width: '100%', maxHeight: '260px',
+                    objectFit: 'cover', display: 'block',
+                  }} />
                 ) : (
-                  <span style={{ fontSize: '10px', color: '#756B5F' }}>영상</span>
+                  <video src={previewUrl} controls style={{
+                    width: '100%', maxHeight: '260px', display: 'block',
+                  }} />
+                )}
+                {uploading && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0.45)',
+                    backdropFilter: 'blur(2px)',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: '10px',
+                  }}>
+                    <span className="spin" style={{
+                      display: 'block', width: '28px', height: '28px',
+                      border: '3px solid rgba(255,255,255,0.25)',
+                      borderTopColor: 'white', borderRadius: '50%',
+                    }} />
+                    <span style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>업로드 중...</span>
+                  </div>
+                )}
+
+                {!uploading && (
+                  <button type="button" className="btn-press"
+                    onClick={() => {
+                      URL.revokeObjectURL(previewUrl);
+                      setPreviewUrl('');
+                      setNewPhoto(prev => ({ ...prev, url: '' }));
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    style={{
+                      position: 'absolute', top: '8px', right: '8px',
+                      width: '30px', height: '30px',
+                      background: 'rgba(0,0,0,0.45)',
+                      backdropFilter: 'blur(4px)',
+                      border: 'none', borderRadius: '50%',
+                      color: 'white', fontSize: '15px',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    ✕
+                  </button>
                 )}
               </div>
-              <div style={{ flex: 1, marginLeft: '12px', minWidth: 0 }}>
-                <div style={{ fontWeight: 'bold', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                <div style={{ fontSize: '12px', color: '#756B5F', marginTop: '2px' }}>{item.date} • <span style={{ color: '#A54F30', fontWeight: '600' }}>{getFolderName(item.folderId)}</span></div>
-              </div>
-              <button onClick={() => handleDelete(index)} style={{ backgroundColor: '#FAF6F0', color: '#B8633F', border: '1px solid #E4DCCC', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', marginLeft: '8px' }}>
-                삭제
-              </button>
             </div>
-          ))
-        )}
+          ) : (
+            <button type="button" className="upload-area"
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                width: '100%',
+                padding: '32px 16px',
+                background: theme.borderLight,
+                border: `2px dashed ${theme.border}`,
+                borderRadius: theme.radiusSm,
+                cursor: 'pointer',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: '8px',
+                marginBottom: '16px',
+              }}
+            >
+              <div style={{
+                width: '44px', height: '44px',
+                background: theme.card,
+                borderRadius: '12px',
+                boxShadow: theme.shadow,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '20px',
+              }}>📷</div>
+              <span style={{ fontSize: '14px', fontWeight: '500', color: theme.inkSoft }}>
+                터치해서 사진 선택
+              </span>
+              <span style={{ fontSize: '11px', color: theme.inkMuted }}>
+                사진 또는 영상을 올릴 수 있어요
+              </span>
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+          />
+
+          {/* Title & Date */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>제목</label>
+              <input type="text" placeholder="이 순간의 제목"
+                value={newPhoto.title}
+                onChange={e => setNewPhoto({ ...newPhoto, title: e.target.value })}
+                className="input-field"
+                style={{
+                  width: '100%', padding: '11px 12px', fontSize: '14px',
+                  borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+                  background: theme.bg, outline: 'none',
+                }}
+              />
+            </div>
+            <div style={{ flex: '0 0 130px' }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>날짜</label>
+              <input type="date"
+                value={newPhoto.date}
+                onChange={e => setNewPhoto({ ...newPhoto, date: e.target.value })}
+                className="input-field"
+                style={{
+                  width: '100%', padding: '11px 10px', fontSize: '14px',
+                  borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+                  background: theme.bg, outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          <button type="button" onClick={handleAddPhoto}
+            disabled={!newPhoto.url || uploading}
+            className="btn-press"
+            style={{
+              width: '100%', padding: '13px',
+              fontSize: '14px', fontWeight: '600',
+              background: (newPhoto.url && !uploading) ? theme.primary : theme.border,
+              color: (newPhoto.url && !uploading) ? 'white' : theme.inkMuted,
+              border: 'none', borderRadius: theme.radiusSm,
+              cursor: (newPhoto.url && !uploading) ? 'pointer' : 'default',
+            }}
+          >
+            목록에 추가
+          </button>
+        </div>
+
+        {/* ── Photo List ── */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '0 4px', marginBottom: '10px',
+          }}>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: theme.inkSoft }}>
+              등록 목록
+            </span>
+            <span style={{
+              fontSize: '12px', fontWeight: '600', color: theme.primary,
+              background: theme.primarySoft,
+              padding: '3px 10px', borderRadius: theme.radiusFull,
+            }}>
+              {photos.length}
+            </span>
+          </div>
+
+          {photos.length === 0 ? (
+            <div style={{
+              background: theme.card,
+              borderRadius: theme.radius,
+              boxShadow: theme.shadow,
+              padding: '40px 20px',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '10px', opacity: 0.4 }}>📸</div>
+              <p style={{ fontSize: '13px', color: theme.inkMuted, margin: 0, lineHeight: 1.6 }}>
+                아직 등록한 사진이 없어요<br />
+                위에서 사진을 추가해 보세요
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {photos.map((item, index) => (
+                <div key={index} className="photo-card" style={{
+                  background: theme.card,
+                  borderRadius: theme.radiusSm,
+                  boxShadow: theme.shadow,
+                  padding: '12px',
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                }}>
+                  <div style={{
+                    width: '52px', height: '52px',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    background: '#F1EDE6',
+                    flexShrink: 0,
+                  }}>
+                    {isImageFile(item.url) ? (
+                      <img src={item.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: theme.inkMuted }}>▶</div>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: '14px', fontWeight: '600', color: theme.ink,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{item.title}</div>
+                    <div style={{ fontSize: '12px', color: theme.inkMuted, marginTop: '3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{item.date}</span>
+                      <span style={{
+                        background: theme.primarySoft,
+                        color: theme.primary,
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        padding: '1px 7px',
+                        borderRadius: theme.radiusFull,
+                      }}>{folderLabels[item.folderId] || item.folderId}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => handleDelete(index)} className="btn-press" style={{
+                    width: '32px', height: '32px',
+                    background: theme.dangerSoft,
+                    border: 'none', borderRadius: '8px',
+                    color: theme.danger, fontSize: '14px',
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Toast */}
+      {toast && <Toast message={toast} />}
+    </div>
+  );
+}
+
+function Toast({ message }) {
+  return (
+    <div className="fade-up" style={{
+      position: 'fixed',
+      bottom: '32px', left: '50%',
+      transform: 'translateX(-50%)',
+      background: 'rgba(28,25,23,0.88)',
+      backdropFilter: 'blur(8px)',
+      color: 'white',
+      padding: '12px 24px',
+      borderRadius: '9999px',
+      fontSize: '13px',
+      fontWeight: '500',
+      zIndex: 100,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+      whiteSpace: 'nowrap',
+    }}>
+      {message}
     </div>
   );
 }
