@@ -1,5 +1,6 @@
 const ADMIN_PASSWORD = '4547';
 const KV_KEY = 'album-photos';
+const COVERS_KEY = 'folder-covers';
 const R2_PUBLIC_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
 
 export default {
@@ -14,6 +15,15 @@ export default {
 
       if (url.pathname === '/functions/api/upload' && request.method === 'POST') {
         return handleUpload(request, env);
+      }
+
+      if (url.pathname === '/functions/api/delete' && request.method === 'POST') {
+        return handleDeleteFile(request, env);
+      }
+
+      if (url.pathname === '/functions/api/covers') {
+        if (request.method === 'GET') return handleGetCovers(env);
+        if (request.method === 'POST') return handleSaveCovers(request, env);
       }
 
       if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
@@ -65,6 +75,38 @@ async function handleUpload(request, env) {
 
   const url = R2_PUBLIC_BASE + encodeURIComponent(key);
   return Response.json({ success: true, url, key });
+}
+
+async function handleGetCovers(env) {
+  const data = await env.ALBUM_KV.get(COVERS_KEY);
+  return Response.json(data ? JSON.parse(data) : {});
+}
+
+async function handleSaveCovers(request, env) {
+  const body = await request.json();
+
+  if (body.password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  await env.ALBUM_KV.put(COVERS_KEY, JSON.stringify(body.covers || {}));
+  return Response.json({ success: true });
+}
+
+async function handleDeleteFile(request, env) {
+  const body = await request.json();
+
+  if (body.password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  if (!body.url) {
+    return Response.json({ success: false, error: '삭제할 파일 URL이 없습니다.' }, { status: 400 });
+  }
+
+  const key = decodeURIComponent(body.url.replace(R2_PUBLIC_BASE, ''));
+  await env.PHOTO_BUCKET.delete(key);
+  return Response.json({ success: true });
 }
 
 async function handleListPhotos(env) {

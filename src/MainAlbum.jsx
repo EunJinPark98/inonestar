@@ -115,12 +115,17 @@ const Styles = () => (
 export default function MainAlbum() {
   const [currentFolder, setCurrentFolder] = useState(null);
   const [photos, setPhotos] = useState([]);
+  const [covers, setCovers] = useState({});
   const [transitioning, setTransitioning] = useState(false);
 
   useEffect(() => {
     fetch('/functions/api')
       .then(res => res.json())
       .then(data => setPhotos(data || []))
+      .catch(() => {});
+    fetch('/functions/api/covers')
+      .then(res => res.json())
+      .then(data => setCovers(data || {}))
       .catch(() => {});
   }, []);
 
@@ -138,6 +143,7 @@ export default function MainAlbum() {
   const selectedFolder = mockData.folders.find(f => f.id === currentFolder);
 
   const getCoverImage = (folderId) => {
+    if (covers[String(folderId)]) return covers[String(folderId)];
     const items = allFolderItems[folderId] || [];
     const img = items.find(item => isImage(item.url));
     return img ? img.url : null;

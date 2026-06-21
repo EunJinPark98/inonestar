@@ -107,6 +107,7 @@ export default function Admin() {
   const [view, setView] = useState('register');
   const [editIndex, setEditIndex] = useState(null);
   const [editData, setEditData] = useState(null);
+  const [covers, setCovers] = useState({});
 
   const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1' });
   const [uploading, setUploading] = useState(false);
@@ -119,6 +120,10 @@ export default function Admin() {
     fetch('/functions/api')
       .then(res => res.json())
       .then(data => setPhotos(data || []))
+      .catch(() => {});
+    fetch('/functions/api/covers')
+      .then(res => res.json())
+      .then(data => setCovers(data || {}))
       .catch(() => {});
   }, []);
 
@@ -182,7 +187,18 @@ export default function Admin() {
     showToast('목록에 추가했어요');
   };
 
-  const handleDelete = (index) => {
+  const handleDelete = async (index) => {
+    if (!window.confirm('정말로 삭제하시겠습니까?\nCloudflare에서도 파일이 삭제됩니다.')) return;
+
+    const item = photos[index];
+    try {
+      await fetch('/functions/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, url: item.url })
+      });
+    } catch (_) {}
+
     setPhotos(photos.filter((_, i) => i !== index));
     showToast('삭제했어요');
   };
@@ -706,6 +722,37 @@ export default function Admin() {
                             ))}
                           </div>
                         </div>
+                        {/* Cover image toggle */}
+                        {isImageFile(item.url) && (
+                          <button className="btn-press" onClick={async () => {
+                            const fid = editData?.folderId || item.folderId;
+                            const isCover = covers[fid] === item.url;
+                            const next = { ...covers };
+                            if (isCover) { delete next[fid]; } else { next[fid] = item.url; }
+                            setCovers(next);
+                            try {
+                              await fetch('/functions/api/covers', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ password, covers: next })
+                              });
+                            } catch (_) {}
+                            showToast(isCover ? '대표 이미지 해제했어요' : '대표 이미지로 설정했어요');
+                          }}
+                            style={{
+                              width: '100%', padding: '10px', marginBottom: '10px',
+                              fontSize: '13px', fontWeight: '600',
+                              background: covers[(editData?.folderId || item.folderId)] === item.url ? theme.successSoft : theme.borderLight,
+                              color: covers[(editData?.folderId || item.folderId)] === item.url ? theme.success : theme.inkSoft,
+                              border: covers[(editData?.folderId || item.folderId)] === item.url ? `1.5px solid ${theme.success}` : `1.5px solid ${theme.border}`,
+                              borderRadius: '8px', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                            }}
+                          >
+                            {covers[(editData?.folderId || item.folderId)] === item.url ? '★ 대표 이미지 해제' : '☆ 이 폴더의 대표 이미지로 설정'}
+                          </button>
+                        )}
+
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button className="btn-press" onClick={() => { setEditIndex(null); setEditData(null); }}
                             style={{ flex: 1, padding: '10px', fontSize: '13px', fontWeight: '600', background: theme.borderLight, color: theme.inkSoft, border: 'none', borderRadius: '8px', cursor: 'pointer' }}
