@@ -60,7 +60,7 @@
 | **Backend** | Cloudflare Workers (`_worker.js`) |
 | **Storage** | Cloudflare R2 — 사진·영상 원본 저장 · Cloudflare KV — 메타데이터/편지 |
 | **Deploy** | Cloudflare (Wrangler) |
-| **Design** | Pretendard · 밤하늘(`#05060c`)과 금빛(`#f5c542`) 팔레트 · 별이 반짝이는 canvas 배경 |
+| **Design** | Noto Serif KR + Inter · 따뜻한 베이지·테라코타·세이지 팔레트 |
 
 <br/>
 

@@ -8,13 +8,11 @@ html {
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
-  background: #05060c;
-  color: #f6f6f8;
+  background: #FAF8F5;
   overflow-x: hidden;
 }
 
@@ -26,8 +24,4 @@ body {
 img, video {
   max-width: 100%;
   height: auto;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
 }
