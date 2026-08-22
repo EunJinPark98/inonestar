@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 
-const mockData = {
-  folders: [
-    { id: 1, name: '신생아', label: '0개월' },
-    { id: 2, name: '1개월', label: '1개월' },
-    { id: 3, name: '2개월', label: '2개월' },
-    { id: 4, name: '3개월', label: '3개월' },
-    { id: 5, name: '4개월', label: '4개월' },
-    { id: 6, name: '5개월', label: '5개월' },
-    { id: 7, name: '6개월', label: '6개월' },
-  ],
-  videos: {
-    1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [],
-  },
-};
+const DEFAULT_FOLDERS = [
+  { id: 1, name: '신생아', label: '0개월' },
+  { id: 2, name: '1개월', label: '1개월' },
+  { id: 3, name: '2개월', label: '2개월' },
+  { id: 4, name: '3개월', label: '3개월' },
+  { id: 5, name: '4개월', label: '4개월' },
+  { id: 6, name: '5개월', label: '5개월' },
+  { id: 7, name: '6개월', label: '6개월' },
+];
 
 const isImage = (url) => /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(url || '');
+
+const R2_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
+const getVideoUrl = (url) => {
+  if (!url || isImage(url)) return url;
+  const key = url.replace(R2_BASE, '');
+  return '/functions/api/video/' + key;
+};
 
 const parseDate = (d) => new Date((d || '').replace(/\./g, '-'));
 
@@ -117,6 +119,8 @@ export default function MainAlbum() {
   const [page, setPage] = useState('album');
   const [photos, setPhotos] = useState([]);
   const [covers, setCovers] = useState({});
+  const [letters, setLetters] = useState([]);
+  const [folders, setFolders] = useState(DEFAULT_FOLDERS);
   const [transitioning, setTransitioning] = useState(false);
 
   useEffect(() => {
@@ -128,20 +132,32 @@ export default function MainAlbum() {
       .then(res => res.json())
       .then(data => setCovers(data || {}))
       .catch(() => {});
+    fetch('/functions/api/letters')
+      .then(res => res.json())
+      .then(data => setLetters(data || []))
+      .catch(() => {});
+    fetch('/functions/api/folders')
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data) && data.length) setFolders(data); })
+      .catch(() => {});
   }, []);
+
+  const hasNewLetter = useMemo(() => {
+    const now = Date.now();
+    return letters.some(l => l.id && (now - l.id < 24 * 60 * 60 * 1000));
+  }, [letters]);
 
   const allFolderItems = useMemo(() => {
     const result = {};
-    mockData.folders.forEach(f => {
-      const staticItems = mockData.videos[f.id] || [];
-      const dynamicItems = photos.filter(item => Number(item.folderId) === f.id);
-      result[f.id] = sortByDate([...dynamicItems, ...staticItems]);
+    folders.forEach(f => {
+      const dynamicItems = photos.filter(item => Number(item.folderId) === Number(f.id));
+      result[f.id] = sortByDate(dynamicItems);
     });
     return result;
-  }, [photos]);
+  }, [photos, folders]);
 
   const currentItems = currentFolder ? (allFolderItems[currentFolder] || []) : [];
-  const selectedFolder = mockData.folders.find(f => f.id === currentFolder);
+  const selectedFolder = folders.find(f => f.id === currentFolder);
 
   const getCoverImage = (folderId) => {
     if (covers[String(folderId)]) return covers[String(folderId)];
@@ -176,11 +192,12 @@ export default function MainAlbum() {
         <LettersView onBack={() => goToPage('album')} />
       ) : currentFolder === null ? (
         <FolderListView
-          folders={mockData.folders}
+          folders={folders}
           allFolderItems={allFolderItems}
           getCoverImage={getCoverImage}
           onSelect={navigate}
           onLetters={() => goToPage('letters')}
+          hasNewLetter={hasNewLetter}
         />
       ) : (
         <PhotoDetailView
@@ -196,7 +213,7 @@ export default function MainAlbum() {
 /* ═══════════════════════════════════
    Folder List (Home)
    ═══════════════════════════════════ */
-function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLetters }) {
+function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLetters, hasNewLetter }) {
   return (
     <div style={{ maxWidth: '520px', margin: '0 auto' }}>
 
@@ -246,9 +263,14 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
       <div style={{ padding: '0 20px 60px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {folders.map((folder, idx) => {
-            const count = (allFolderItems[folder.id] || []).length;
+            const items = allFolderItems[folder.id] || [];
+            const count = items.length;
             const cover = getCoverImage(folder.id);
             const hasPhotos = count > 0;
+            const now = Date.now();
+            const hasNew = items.some(item =>
+              item.uploadedAt && (now - item.uploadedAt < 24 * 60 * 60 * 1000)
+            );
 
             return (
               <div key={folder.id}
@@ -308,13 +330,27 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
                   }}>
                     {folder.label}
                   </div>
-                  <div className="serif" style={{
-                    fontSize: '16px',
-                    fontWeight: '500',
-                    color: t.ink,
-                    marginBottom: '3px',
-                  }}>
-                    {folder.name}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                    <span className="serif" style={{
+                      fontSize: '16px',
+                      fontWeight: '500',
+                      color: t.ink,
+                    }}>
+                      {folder.name}
+                    </span>
+                    {hasNew && (
+                      <span style={{
+                        fontSize: '9px',
+                        fontWeight: '700',
+                        color: '#fff',
+                        background: '#E85D4A',
+                        padding: '1px 6px',
+                        borderRadius: '9999px',
+                        letterSpacing: '0.04em',
+                      }}>
+                        NEW
+                      </span>
+                    )}
                   </div>
                   <div style={{
                     fontSize: '11px',
@@ -353,6 +389,7 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
             padding: '8px 20px',
           }}>
             <div style={{
+              position: 'relative',
               width: '56px', height: '56px',
               borderRadius: '16px',
               background: `linear-gradient(145deg, ${t.warm1} 0%, ${t.warm2} 100%)`,
@@ -363,6 +400,17 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
                 <rect x="2" y="4" width="20" height="16" rx="2" />
                 <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
               </svg>
+              {hasNewLetter && (
+                <span style={{
+                  position: 'absolute', top: '-5px', right: '-5px',
+                  fontSize: '9px', fontWeight: '700', color: '#fff',
+                  background: '#E85D4A', padding: '2px 6px',
+                  borderRadius: '9999px', letterSpacing: '0.04em',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+                }}>
+                  NEW
+                </span>
+              )}
             </div>
             <div style={{ textAlign: 'center' }}>
               <div className="serif" style={{ fontSize: '15px', fontWeight: '500', color: t.ink }}>
@@ -528,7 +576,7 @@ function PhotoCard({ item, index }) {
           <>
             <video
               ref={videoRef}
-              src={item.url + '#t=0.5'}
+              src={getVideoUrl(item.url) + '#t=0.5'}
               preload="metadata"
               playsInline
               controls={playing}
@@ -538,32 +586,30 @@ function PhotoCard({ item, index }) {
               style={{
                 width: '100%',
                 display: 'block',
-                minHeight: '200px',
-                objectFit: 'cover',
               }}
             />
             {!playing && (
               <div
                 onClick={() => {
                   const v = videoRef.current;
-                  if (v) { v.currentTime = 0; v.play(); }
+                  if (v) { v.play(); }
                 }}
                 style={{
                   position: 'absolute', inset: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
-                  background: 'rgba(0,0,0,0.15)',
+                  background: 'rgba(0,0,0,0.12)',
                 }}
               >
                 <div style={{
                   width: '52px', height: '52px',
                   borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.9)',
+                  background: 'rgba(255,255,255,0.92)',
                   backdropFilter: 'blur(4px)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
                 }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill={t.ink}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill={t.accent}>
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 </div>
@@ -871,6 +917,11 @@ function LettersView({ onBack }) {
                     <span style={{ fontSize: '14px', fontWeight: '600', color: t.ink }}>
                       {letter.author}
                     </span>
+                    {letter.id && (Date.now() - letter.id < 24 * 60 * 60 * 1000) && (
+                      <span style={{ fontSize: '9px', color: '#fff', background: '#E85D4A', padding: '2px 6px', borderRadius: '9999px', fontWeight: '700', letterSpacing: '0.04em' }}>
+                        NEW
+                      </span>
+                    )}
                     {letter.private && (
                       <span style={{ fontSize: '10px', color: t.sage, background: t.sageSoft, padding: '2px 7px', borderRadius: '9999px', fontWeight: '600' }}>
                         🔒 비공개

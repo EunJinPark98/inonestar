@@ -109,6 +109,18 @@ export default function Admin() {
   const [editData, setEditData] = useState(null);
   const [covers, setCovers] = useState({});
   const [adminLetters, setAdminLetters] = useState([]);
+  const [folders, setFolders] = useState([
+    { id: 1, name: '신생아', label: '0개월' },
+    { id: 2, name: '1개월', label: '1개월' },
+    { id: 3, name: '2개월', label: '2개월' },
+    { id: 4, name: '3개월', label: '3개월' },
+    { id: 5, name: '4개월', label: '4개월' },
+    { id: 6, name: '5개월', label: '5개월' },
+    { id: 7, name: '6개월', label: '6개월' },
+  ]);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [listPage, setListPage] = useState(0);
+  const PER_PAGE = 20;
 
   const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1' });
   const [uploading, setUploading] = useState(false);
@@ -129,6 +141,10 @@ export default function Admin() {
     fetch('/functions/api/letters')
       .then(res => res.json())
       .then(data => setAdminLetters(data || []))
+      .catch(() => {});
+    fetch('/functions/api/folders')
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data) && data.length) setFolders(data); })
       .catch(() => {});
   }, []);
 
@@ -184,7 +200,7 @@ export default function Admin() {
       return;
     }
 
-    setPhotos([newPhoto, ...photos]);
+    setPhotos([{ ...newPhoto, uploadedAt: Date.now() }, ...photos]);
     setNewPhoto({ ...newPhoto, url: '', title: '', date: '' });
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl('');
@@ -196,6 +212,9 @@ export default function Admin() {
     if (!window.confirm('정말로 삭제하시겠습니까?\nCloudflare에서도 파일이 삭제됩니다.')) return;
 
     const item = photos[index];
+    const updated = photos.filter((_, i) => i !== index);
+
+    // 1. R2에서 실제 파일 삭제
     try {
       await fetch('/functions/api/delete', {
         method: 'POST',
@@ -204,7 +223,18 @@ export default function Admin() {
       });
     } catch (_) {}
 
-    setPhotos(photos.filter((_, i) => i !== index));
+    // 2. KV 목록에서도 즉시 반영 (저장 버튼 없이 바로 반영)
+    try {
+      await fetch('/functions/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, data: updated })
+      });
+    } catch (_) {}
+
+    setPhotos(updated);
+    setEditIndex(null);
+    setEditData(null);
     showToast('삭제했어요');
   };
 
@@ -229,9 +259,41 @@ export default function Admin() {
     }
   };
 
-  const folderLabels = {
-    '1': '신생아', '2': '1개월', '3': '2개월',
-    '4': '3개월', '5': '4개월', '6': '5개월', '7': '6개월'
+  const folderLabels = Object.fromEntries(folders.map(f => [String(f.id), f.name]));
+
+  const saveFolders = async (next) => {
+    setFolders(next);
+    try {
+      await fetch('/functions/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, folders: next })
+      });
+    } catch (_) {}
+  };
+
+  const handleAddFolder = () => {
+    const name = newFolderName.trim();
+    if (!name) { showToast('폴더 이름을 입력해 주세요'); return; }
+    const nextId = folders.length ? Math.max(...folders.map(f => Number(f.id))) + 1 : 1;
+    const next = [...folders, { id: nextId, name, label: name }];
+    saveFolders(next);
+    setNewFolderName('');
+    showToast('폴더를 추가했어요');
+  };
+
+  const handleDeleteFolder = (id) => {
+    const count = photos.filter(p => Number(p.folderId) === Number(id)).length;
+    const msg = count > 0
+      ? `이 폴더에 ${count}개의 기록이 있어요.\n폴더를 삭제해도 사진/영상은 남아있지만 목록에서 보이지 않게 됩니다.\n삭제하시겠습니까?`
+      : '이 폴더를 삭제하시겠습니까?';
+    if (!window.confirm(msg)) return;
+    saveFolders(folders.filter(f => Number(f.id) !== Number(id)));
+    showToast('폴더를 삭제했어요');
+  };
+
+  const handleRenameFolder = (id, name) => {
+    saveFolders(folders.map(f => Number(f.id) === Number(id) ? { ...f, name, label: name } : f));
   };
 
   // ─── Login ───
@@ -321,7 +383,7 @@ export default function Admin() {
       }}>
         <div>
           <h1 style={{ fontSize: '17px', fontWeight: '700', color: theme.ink, margin: 0 }}>
-            {view === 'register' ? '앨범 관리' : view === 'list' ? '등록 목록' : '편지 관리'}
+            {view === 'register' ? '앨범 관리' : view === 'list' ? '등록 목록' : view === 'folders' ? '폴더 관리' : '편지 관리'}
           </h1>
           <p style={{ fontSize: '11px', color: theme.inkMuted, margin: '2px 0 0' }}>
             {photos.length}개 등록됨
@@ -608,6 +670,40 @@ export default function Admin() {
                 </svg>
               </div>
             </button>
+
+            {/* ── Go to folders button ── */}
+            <button
+              type="button"
+              className="btn-press"
+              onClick={() => { setView('folders'); window.scrollTo({ top: 0 }); }}
+              style={{
+                width: '100%', marginTop: '8px',
+                padding: '15px',
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: theme.radiusSm,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                boxShadow: theme.shadow,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '16px' }}>📁</span>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: theme.ink }}>폴더 관리</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{
+                  fontSize: '12px', fontWeight: '700', color: theme.primary,
+                  background: theme.primarySoft,
+                  padding: '2px 10px', borderRadius: theme.radiusFull,
+                }}>
+                  {folders.length}
+                </span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.inkMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+            </button>
           </>
         ) : view === 'list' ? (
           <>
@@ -644,7 +740,10 @@ export default function Admin() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {photos.map((item, index) => (
+                {photos
+                  .map((item, index) => ({ item, index }))
+                  .slice(listPage * PER_PAGE, (listPage + 1) * PER_PAGE)
+                  .map(({ item, index }) => (
                   <div key={index}>
                     {/* Card row */}
                     <div className="photo-card" style={{
@@ -812,10 +911,57 @@ export default function Admin() {
                     )}
                   </div>
                 ))}
+
+                {/* Pagination */}
+                {photos.length > PER_PAGE && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: '8px', marginTop: '12px', flexWrap: 'wrap',
+                  }}>
+                    <button
+                      className="btn-press"
+                      disabled={listPage === 0}
+                      onClick={() => { setListPage(p => Math.max(0, p - 1)); setEditIndex(null); setEditData(null); window.scrollTo({ top: 0 }); }}
+                      style={{
+                        width: '34px', height: '34px', borderRadius: '8px',
+                        border: 'none', cursor: listPage === 0 ? 'default' : 'pointer',
+                        background: listPage === 0 ? theme.borderLight : theme.card,
+                        color: listPage === 0 ? theme.inkMuted : theme.ink,
+                        boxShadow: listPage === 0 ? 'none' : theme.shadow,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        opacity: listPage === 0 ? 0.5 : 1,
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+                    </button>
+
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: theme.inkSoft, minWidth: '54px', textAlign: 'center' }}>
+                      {listPage + 1} / {Math.ceil(photos.length / PER_PAGE)}
+                    </span>
+
+                    <button
+                      className="btn-press"
+                      disabled={listPage >= Math.ceil(photos.length / PER_PAGE) - 1}
+                      onClick={() => { setListPage(p => Math.min(Math.ceil(photos.length / PER_PAGE) - 1, p + 1)); setEditIndex(null); setEditData(null); window.scrollTo({ top: 0 }); }}
+                      style={{
+                        width: '34px', height: '34px', borderRadius: '8px',
+                        border: 'none',
+                        cursor: listPage >= Math.ceil(photos.length / PER_PAGE) - 1 ? 'default' : 'pointer',
+                        background: listPage >= Math.ceil(photos.length / PER_PAGE) - 1 ? theme.borderLight : theme.card,
+                        color: listPage >= Math.ceil(photos.length / PER_PAGE) - 1 ? theme.inkMuted : theme.ink,
+                        boxShadow: listPage >= Math.ceil(photos.length / PER_PAGE) - 1 ? 'none' : theme.shadow,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        opacity: listPage >= Math.ceil(photos.length / PER_PAGE) - 1 ? 0.5 : 1,
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>
-        ) : (
+        ) : view === 'letters' ? (
           <>
             {/* ── Letters View ── */}
             <button
@@ -898,6 +1044,105 @@ export default function Admin() {
                 ))}
               </div>
             )}
+          </>
+        ) : (
+          <>
+            {/* ── Folders View ── */}
+            <button
+              type="button"
+              className="btn-press"
+              onClick={() => { setView('register'); window.scrollTo({ top: 0 }); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: '0 0 14px', color: theme.inkSoft, fontSize: '14px', fontWeight: '500',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              사진 등록으로 돌아가기
+            </button>
+
+            {/* Add folder */}
+            <div style={{
+              background: theme.card,
+              borderRadius: theme.radius,
+              boxShadow: theme.shadow,
+              padding: '16px',
+              marginBottom: '16px',
+            }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '8px' }}>
+                새 폴더 만들기
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="예: 7개월, 첫 여행"
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddFolder(); }}
+                  className="input-field"
+                  style={{
+                    flex: 1, padding: '11px 12px', fontSize: '14px',
+                    borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+                    background: theme.bg, outline: 'none',
+                  }}
+                />
+                <button className="btn-press" onClick={handleAddFolder} style={{
+                  padding: '0 18px', fontSize: '14px', fontWeight: '600',
+                  background: theme.primary, color: '#fff', border: 'none',
+                  borderRadius: '8px', cursor: 'pointer', flexShrink: 0,
+                }}>추가</button>
+              </div>
+            </div>
+
+            {/* Folder list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {folders.map((folder) => {
+                const count = photos.filter(p => Number(p.folderId) === Number(folder.id)).length;
+                return (
+                  <div key={folder.id} style={{
+                    background: theme.card,
+                    borderRadius: theme.radiusSm,
+                    boxShadow: theme.shadow,
+                    padding: '12px 14px',
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                  }}>
+                    <span style={{ fontSize: '18px' }}>📁</span>
+                    <input
+                      type="text"
+                      defaultValue={folder.name}
+                      onBlur={e => {
+                        const v = e.target.value.trim();
+                        if (v && v !== folder.name) handleRenameFolder(folder.id, v);
+                      }}
+                      className="input-field"
+                      style={{
+                        flex: 1, minWidth: 0, padding: '8px 10px', fontSize: '14px', fontWeight: '600',
+                        color: theme.ink, borderRadius: '6px',
+                        border: `1.5px solid transparent`, background: 'transparent', outline: 'none',
+                      }}
+                    />
+                    <span style={{
+                      fontSize: '11px', color: theme.inkMuted,
+                      background: theme.borderLight, padding: '2px 8px',
+                      borderRadius: theme.radiusFull, flexShrink: 0,
+                    }}>{count}개</span>
+                    <button className="btn-press" onClick={() => handleDeleteFolder(folder.id)} style={{
+                      width: '30px', height: '30px',
+                      background: theme.dangerSoft, border: 'none', borderRadius: '7px',
+                      color: theme.danger, fontSize: '13px', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '12px', lineHeight: 1.6, textAlign: 'center' }}>
+              폴더 이름을 눌러 수정할 수 있어요.<br />변경사항은 자동으로 저장됩니다.
+            </p>
           </>
         )}
       </div>

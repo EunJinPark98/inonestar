@@ -2,6 +2,17 @@ const ADMIN_PASSWORD = '4547';
 const KV_KEY = 'album-photos';
 const COVERS_KEY = 'folder-covers';
 const LETTERS_KEY = 'letters';
+const FOLDERS_KEY = 'folders';
+
+const DEFAULT_FOLDERS = [
+  { id: 1, name: '신생아', label: '0개월' },
+  { id: 2, name: '1개월', label: '1개월' },
+  { id: 3, name: '2개월', label: '2개월' },
+  { id: 4, name: '3개월', label: '3개월' },
+  { id: 5, name: '4개월', label: '4개월' },
+  { id: 6, name: '5개월', label: '5개월' },
+  { id: 7, name: '6개월', label: '6개월' },
+];
 const R2_PUBLIC_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
 
 export default {
@@ -18,6 +29,10 @@ export default {
         return handleUpload(request, env);
       }
 
+      if (url.pathname === '/functions/api/upload-raw' && request.method === 'POST') {
+        return handleUploadRaw(request, env);
+      }
+
       if (url.pathname === '/functions/api/delete' && request.method === 'POST') {
         return handleDeleteFile(request, env);
       }
@@ -27,6 +42,11 @@ export default {
         if (request.method === 'POST') return handleSaveCovers(request, env);
       }
 
+      if (url.pathname === '/functions/api/folders') {
+        if (request.method === 'GET') return handleGetFolders(env);
+        if (request.method === 'POST') return handleSaveFolders(request, env);
+      }
+
       if (url.pathname === '/functions/api/letters') {
         if (request.method === 'GET') return handleGetLetters(env);
         if (request.method === 'POST') return handleAddLetter(request, env);
@@ -34,6 +54,10 @@ export default {
 
       if (url.pathname === '/functions/api/letters/delete' && request.method === 'POST') {
         return handleDeleteLetter(request, env);
+      }
+
+      if (url.pathname.startsWith('/functions/api/video/')) {
+        return handleVideoStream(request, url, env);
       }
 
       if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
@@ -87,6 +111,22 @@ async function handleUpload(request, env) {
   return Response.json({ success: true, url, key });
 }
 
+async function handleUploadRaw(request, env) {
+  const password = request.headers.get('X-Password');
+  if (password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  const key = request.headers.get('X-Key');
+  const contentType = request.headers.get('Content-Type') || 'video/mp4';
+  await env.PHOTO_BUCKET.put(key, request.body, {
+    httpMetadata: { contentType }
+  });
+
+  const url = R2_PUBLIC_BASE + encodeURIComponent(key);
+  return Response.json({ success: true, url, key });
+}
+
 async function handleGetCovers(env) {
   const data = await env.ALBUM_KV.get(COVERS_KEY);
   return Response.json(data ? JSON.parse(data) : {});
@@ -100,6 +140,22 @@ async function handleSaveCovers(request, env) {
   }
 
   await env.ALBUM_KV.put(COVERS_KEY, JSON.stringify(body.covers || {}));
+  return Response.json({ success: true });
+}
+
+async function handleGetFolders(env) {
+  const data = await env.ALBUM_KV.get(FOLDERS_KEY);
+  return Response.json(data ? JSON.parse(data) : DEFAULT_FOLDERS);
+}
+
+async function handleSaveFolders(request, env) {
+  const body = await request.json();
+
+  if (body.password !== ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  await env.ALBUM_KV.put(FOLDERS_KEY, JSON.stringify(body.folders || DEFAULT_FOLDERS));
   return Response.json({ success: true });
 }
 
@@ -156,6 +212,46 @@ async function handleDeleteLetter(request, env) {
   const filtered = letters.filter(l => l.id !== body.id);
   await env.ALBUM_KV.put(LETTERS_KEY, JSON.stringify(filtered));
   return Response.json({ success: true });
+}
+
+async function handleVideoStream(request, url, env) {
+  const key = decodeURIComponent(url.pathname.replace('/functions/api/video/', ''));
+  const rangeHeader = request.headers.get('Range');
+
+  const opts = rangeHeader ? { range: { suffix: undefined } } : {};
+  if (rangeHeader) {
+    const m = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (m) {
+      opts.range = { offset: parseInt(m[1]) };
+      if (m[2]) opts.range.length = parseInt(m[2]) - parseInt(m[1]) + 1;
+    }
+  }
+
+  const obj = await env.PHOTO_BUCKET.get(key, opts);
+  if (!obj) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  const ext = key.split('.').pop().toLowerCase();
+  const contentType = ext === 'mp4' ? 'video/mp4'
+    : ext === 'mov' ? 'video/quicktime'
+    : 'video/mp4';
+
+  const headers = {
+    'Content-Type': contentType,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'public, max-age=86400',
+  };
+
+  if (rangeHeader && obj.range) {
+    const { offset, length } = obj.range;
+    headers['Content-Range'] = `bytes ${offset}-${offset + length - 1}/${obj.size}`;
+    headers['Content-Length'] = length;
+    return new Response(obj.body, { status: 206, headers });
+  }
+
+  headers['Content-Length'] = obj.size;
+  return new Response(obj.body, { status: 200, headers });
 }
 
 async function handleListPhotos(env) {
