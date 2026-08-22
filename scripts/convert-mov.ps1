@@ -11,7 +11,13 @@ $R2_BASE  = "https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev"
 $BUCKET   = "onestar-album"
 $KV_NS    = "ff7a36162916421abda24e3dccb61427"
 $KV_KEY   = "album-photos"
-$PASSWORD = "4547"
+# 관리자 비밀번호는 환경변수에서 읽는다. 스케줄러 작업에 다음을 설정할 것:
+#   setx INONESTAR_ADMIN_PASSWORD "<비밀번호>"
+$PASSWORD = $env:INONESTAR_ADMIN_PASSWORD
+if ([string]::IsNullOrEmpty($PASSWORD)) {
+    Write-Error "환경변수 INONESTAR_ADMIN_PASSWORD 가 설정되지 않았습니다."
+    exit 1
+}
 $TMP      = "$PSScriptRoot\_tmp_convert"
 $LOG      = "$PSScriptRoot\convert-log.txt"
 

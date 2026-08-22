@@ -30,3 +30,6 @@ dist-ssr
 temp_convert/
 scripts/_tmp_convert/
 scripts/convert-log.txt
+
+# 로컬 개발용 시크릿 (wrangler dev)
+.dev.vars

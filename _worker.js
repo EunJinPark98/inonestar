@@ -1,4 +1,3 @@
-const ADMIN_PASSWORD = '4547';
 const KV_KEY = 'album-photos';
 const COVERS_KEY = 'folder-covers';
 const LETTERS_KEY = 'letters';
@@ -63,6 +62,10 @@ export default {
       if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
         return handleListPhotos(env);
       }
+
+      if (url.pathname === '/functions/api/verify' && request.method === 'POST') {
+        return handleVerify(request, env);
+      }
     } catch (err) {
       return Response.json({ error: err.message }, { status: 500 });
     }
@@ -70,6 +73,16 @@ export default {
     return env.ASSETS.fetch(request);
   }
 };
+
+async function handleVerify(request, env) {
+  const body = await request.json();
+
+  if (body.password !== env.ADMIN_PASSWORD) {
+    return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+  }
+
+  return Response.json({ success: true });
+}
 
 async function handleGetAlbum(env) {
   const data = await env.ALBUM_KV.get(KV_KEY);
@@ -79,7 +92,7 @@ async function handleGetAlbum(env) {
 async function handleSaveAlbum(request, env) {
   const body = await request.json();
 
-  if (body.password !== ADMIN_PASSWORD) {
+  if (body.password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
@@ -92,7 +105,7 @@ async function handleUpload(request, env) {
   const file = formData.get('file');
   const password = formData.get('password');
 
-  if (password !== ADMIN_PASSWORD) {
+  if (password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
@@ -113,7 +126,7 @@ async function handleUpload(request, env) {
 
 async function handleUploadRaw(request, env) {
   const password = request.headers.get('X-Password');
-  if (password !== ADMIN_PASSWORD) {
+  if (password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
@@ -135,7 +148,7 @@ async function handleGetCovers(env) {
 async function handleSaveCovers(request, env) {
   const body = await request.json();
 
-  if (body.password !== ADMIN_PASSWORD) {
+  if (body.password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
@@ -151,7 +164,7 @@ async function handleGetFolders(env) {
 async function handleSaveFolders(request, env) {
   const body = await request.json();
 
-  if (body.password !== ADMIN_PASSWORD) {
+  if (body.password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
@@ -162,7 +175,7 @@ async function handleSaveFolders(request, env) {
 async function handleDeleteFile(request, env) {
   const body = await request.json();
 
-  if (body.password !== ADMIN_PASSWORD) {
+  if (body.password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
@@ -203,7 +216,7 @@ async function handleAddLetter(request, env) {
 
 async function handleDeleteLetter(request, env) {
   const body = await request.json();
-  if (body.password !== ADMIN_PASSWORD) {
+  if (body.password !== env.ADMIN_PASSWORD) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 

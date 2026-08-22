@@ -155,12 +155,23 @@ export default function Admin() {
 
   const isImageFile = (url) => /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(url || '');
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (password === '4547') {
-      setIsLoggedIn(true);
-    } else {
-      showToast('비밀번호가 틀렸어요');
+    try {
+      const res = await fetch('/functions/api/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const result = await res.json();
+
+      if (result.success) {
+        setIsLoggedIn(true);
+      } else {
+        showToast('비밀번호가 틀렸어요');
+      }
+    } catch {
+      showToast('로그인에 실패했어요. 잠시 후 다시 시도해 주세요.');
     }
   };
 
