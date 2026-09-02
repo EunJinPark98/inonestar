@@ -64,6 +64,9 @@ const Styles = () => (
       from { opacity: 0; transform: translateY(14px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
     @keyframes shimmer {
       0%   { background-position: -200% 0; }
       100% { background-position: 200% 0; }
@@ -629,6 +632,10 @@ function PhotoCard({ item, index }) {
   // 잠깐 줄었다 커진다. 크기를 미리 붙잡아 두면 흔들리지 않는다.
   const [boxHeight, setBoxHeight] = useState(null);
   const [ratio, setRatio] = useState(null);
+  // 재생을 누르면 브라우저가 포스터를 치워버려 첫 프레임이 올 때까지
+  // 회색 화면이 뜬다. 실제로 재생이 시작될 때까지 포스터를 덮어 둔다.
+  const [started, setStarted] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const needsFrame = !photo && !hasPoster;
   const useFrame = needsFrame && inView;
 
@@ -641,6 +648,7 @@ function PhotoCard({ item, index }) {
     const v = videoRef.current;
     if (!v) return;
     lockBoxHeight();
+    setWaiting(true);
     if (useFrame && v.currentTime) v.currentTime = 0;
     v.play();
   };
@@ -742,6 +750,7 @@ function PhotoCard({ item, index }) {
               playsInline
               controls={playing}
               onPlay={() => setPlaying(true)}
+              onPlaying={() => { setStarted(true); setWaiting(false); }}
               onPause={() => setPlaying(false)}
               onEnded={() => setPlaying(false)}
               onLoadedMetadata={lockBoxHeight}
@@ -754,7 +763,39 @@ function PhotoCard({ item, index }) {
                   : (boxHeight ? `${boxHeight}px` : (hasPoster ? undefined : '220px')),
               }}
             />
-            {!playing && (
+            {/* 첫 프레임이 나오기 전까지 포스터를 덮어 회색 화면을 가린다 */}
+            {hasPoster && !started && (
+              <img
+                src={item.poster}
+                alt=""
+                aria-hidden="true"
+                style={{
+                  position: 'absolute', inset: 0,
+                  width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+
+            {waiting && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'rgba(0,0,0,0.18)',
+                pointerEvents: 'none',
+              }}>
+                <div style={{
+                  width: '38px', height: '38px',
+                  borderRadius: '50%',
+                  border: '3px solid rgba(255,255,255,0.45)',
+                  borderTopColor: '#FFFFFF',
+                  animation: 'spin 0.8s linear infinite',
+                }} />
+              </div>
+            )}
+
+            {!playing && !waiting && (
               <div
                 onClick={startPlay}
                 style={{
