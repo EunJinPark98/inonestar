@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 const theme = {
   bg: '#F5F3EF',
@@ -138,60 +138,85 @@ const uploadBlob = async (blob, key, contentType, password) => {
   return res.json();
 };
 
-// 영상 첫 프레임을 뽑아 포스터 이미지를 만든다.
+const R2_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
+
+// 이미 올라간 영상은 워커를 통해 같은 출처로 받는다.
+// r2.dev에서 바로 받으면 canvas가 오염돼 프레임을 못 꺼낸다.
+const sameOriginVideoUrl = (url) => {
+  const key = decodeURIComponent((url || '').replace(R2_BASE, ''));
+  return '/functions/api/video/' + key.split('/').map(encodeURIComponent).join('/');
+};
+
+// 영상에서 첫 프레임을 뽑아 포스터 이미지를 만든다.
 // 목록에서 영상 본체를 받지 않고도 썸네일을 보여주기 위한 것.
 // 브라우저가 못 여는 코덱(HEVC .mov 등)이면 null을 돌려주고 조용히 넘어간다.
-const captureVideoPoster = (file) => new Promise((resolve) => {
+const capturePosterFromSrc = (src) => new Promise((resolve) => {
   let settled = false;
-  let objectUrl = '';
   const video = document.createElement('video');
 
   const finish = (blob) => {
     if (settled) return;
     settled = true;
-    clearTimeout(timer);
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    clearTimeout(hardTimer);
+    clearTimeout(seekTimer);
+    video.removeAttribute('src');
     resolve(blob);
   };
 
-  const timer = setTimeout(() => finish(null), 10000);
+  const draw = () => {
+    try {
+      const w = video.videoWidth || 0;
+      const h = video.videoHeight || 0;
+      if (!w || !h) return finish(null);
 
-  try {
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
+      const scale = Math.min(1, 720 / w);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => finish(blob), 'image/jpeg', 0.8);
+    } catch {
+      finish(null);
+    }
+  };
 
-    video.onloadedmetadata = () => {
-      const half = (video.duration || 1) / 2;
-      const target = Math.min(0.5, half);
-      video.currentTime = Number.isFinite(target) && target > 0 ? target : 0;
-    };
+  const hardTimer = setTimeout(() => finish(null), 30000);
+  let seekTimer = 0;
 
-    video.onseeked = () => {
-      try {
-        const w = video.videoWidth || 0;
-        const h = video.videoHeight || 0;
-        if (!w || !h) return finish(null);
+  video.preload = 'metadata';
+  video.muted = true;
+  video.playsInline = true;
 
-        const scale = Math.min(1, 720 / w);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(w * scale);
-        canvas.height = Math.round(h * scale);
-        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => finish(blob), 'image/jpeg', 0.8);
-      } catch {
-        finish(null);
-      }
-    };
+  video.onloadedmetadata = () => {
+    const target = Math.min(0.5, (video.duration || 1) / 2);
+    video.currentTime = Number.isFinite(target) && target > 0 ? target : 0;
+  };
 
-    video.onerror = () => finish(null);
+  // 파일에 따라 seeked가 끝내 오지 않는 경우가 있다. 그때는 지금 프레임이라도 쓴다.
+  video.onloadeddata = () => {
+    clearTimeout(seekTimer);
+    seekTimer = setTimeout(() => { if (video.readyState >= 2) draw(); }, 3000);
+  };
 
-    objectUrl = URL.createObjectURL(file);
-    video.src = objectUrl;
-  } catch {
-    finish(null);
-  }
+  video.onseeked = draw;
+  video.onerror = () => finish(null);
+
+  video.src = src;
 });
+
+// 업로드 직전 고른 파일에서 뽑을 때
+const captureVideoPoster = async (file) => {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return await capturePosterFromSrc(objectUrl);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+// 이미 올라간 영상에서 뽑을 때. 워커를 거쳐 같은 출처로 받아야
+// canvas가 오염되지 않아 프레임을 꺼낼 수 있다.
+const capturePosterFromUrl = (url) => capturePosterFromSrc(url);
 
 export default function Admin() {
   const [password, setPassword] = useState('');
@@ -222,6 +247,11 @@ export default function Admin() {
   const [toast, setToast] = useState('');
   const fileInputRef = useRef(null);
 
+  // 예전에 올린 영상들은 포스터가 없어서 목록에서 영상을 직접 받아야 한다.
+  // 관리자 화면을 열면 한 번씩 만들어 채워 둔다.
+  const [backfill, setBackfill] = useState({ total: 0, done: 0, failed: 0, running: false });
+  const backfillStop = useRef(false);
+
   useEffect(() => {
     fetch('/functions/api')
       .then(res => res.json())
@@ -240,6 +270,77 @@ export default function Admin() {
       .then(data => { if (Array.isArray(data) && data.length) setFolders(data); })
       .catch(() => {});
   }, []);
+
+  // 포스터가 없는 예전 영상 목록
+  const posterTargets = useMemo(
+    () => photos.filter(item => item.url && !IMAGE_EXT.test(item.url) && !item.poster),
+    [photos]
+  );
+
+  // 예전 영상들의 첫 프레임을 뽑아 포스터로 저장한다.
+  // 영상을 한 번씩 받아야 하므로 버튼을 눌렀을 때만 실행한다.
+  const runPosterBackfill = async () => {
+    if (backfill.running) return;
+
+    const targets = posterTargets;
+    if (targets.length === 0) return;
+
+    backfillStop.current = false;
+    setBackfill({ total: targets.length, done: 0, failed: 0, running: true });
+
+    const posters = {};
+    for (const item of targets) {
+      if (backfillStop.current) break;
+
+      let ok = false;
+      try {
+        const blob = await capturePosterFromUrl(sameOriginVideoUrl(item.url));
+        if (blob) {
+          const key = makeKey(item.url, '_poster').replace(/\.[^.]+$/, '.jpg');
+          const res = await uploadBlob(blob, key, 'image/jpeg', password);
+          if (res.success) {
+            posters[item.url] = res.url;
+            ok = true;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+
+      setBackfill(b => ({ ...b, done: b.done + (ok ? 1 : 0), failed: b.failed + (ok ? 0 : 1) }));
+    }
+
+    const madeCount = Object.keys(posters).length;
+
+    if (madeCount > 0) {
+      // 작업 중에 목록이 바뀌었을 수 있으니 최신 목록에 얹는다.
+      let base = photos;
+      try {
+        const fresh = await (await fetch('/functions/api')).json();
+        if (Array.isArray(fresh)) base = fresh;
+      } catch {
+        // 최신 목록을 못 받으면 화면에 있는 것으로 진행
+      }
+
+      const next = base.map(item => (posters[item.url] ? { ...item, poster: posters[item.url] } : item));
+      setPhotos(next);
+
+      try {
+        await fetch('/functions/api', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, data: next })
+        });
+        showToast(`썸네일 ${madeCount}개를 만들었어요`);
+      } catch {
+        showToast('썸네일 저장에 실패했어요');
+      }
+    } else {
+      showToast('만들 수 있는 썸네일이 없었어요');
+    }
+
+    setBackfill(b => ({ ...b, running: false }));
+  };
 
   const showToast = (msg) => {
     setToast(msg);
@@ -518,6 +619,91 @@ export default function Admin() {
           {saving ? '저장 중' : '저장'}
         </button>
       </div>
+
+      {(posterTargets.length > 0 || backfill.total > 0) && (
+        <div style={{ maxWidth: '500px', margin: '12px auto 0', padding: '0 16px' }}>
+          <div style={{
+            background: theme.card,
+            border: `1px solid ${theme.border}`,
+            borderRadius: theme.radius,
+            boxShadow: theme.shadow,
+            padding: '16px',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
+            }}>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: theme.ink }}>
+                  영상 썸네일 만들기
+                </div>
+                <div style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '3px' }}>
+                  {backfill.running
+                    ? '영상을 하나씩 열어보는 중이에요'
+                    : posterTargets.length > 0
+                      ? `썸네일 없는 영상 ${posterTargets.length}개`
+                      : '모든 영상에 썸네일이 있어요'}
+                </div>
+              </div>
+
+              {backfill.running ? (
+                <button type="button" className="btn-press"
+                  onClick={() => { backfillStop.current = true; }}
+                  style={{
+                    flexShrink: 0,
+                    padding: '8px 16px', fontSize: '13px', fontWeight: '600',
+                    background: theme.borderLight, color: theme.inkSoft,
+                    border: 'none', borderRadius: theme.radiusFull,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  중지
+                </button>
+              ) : posterTargets.length > 0 ? (
+                <button type="button" className="btn-press"
+                  onClick={runPosterBackfill}
+                  style={{
+                    flexShrink: 0,
+                    padding: '9px 18px', fontSize: '13px', fontWeight: '600',
+                    background: theme.primary, color: 'white',
+                    border: 'none', borderRadius: theme.radiusFull,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  만들기
+                </button>
+              ) : null}
+            </div>
+
+            {backfill.total > 0 && (
+              <>
+                <div style={{
+                  height: '6px', marginTop: '14px',
+                  background: theme.borderLight, borderRadius: '999px', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${Math.round(((backfill.done + backfill.failed) / backfill.total) * 100)}%`,
+                    height: '100%', background: theme.primary,
+                    borderRadius: '999px', transition: 'width 0.3s ease',
+                  }} />
+                </div>
+
+                <div style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '8px' }}>
+                  {backfill.done + backfill.failed} / {backfill.total}개 처리
+                  {backfill.done > 0 && ` · ${backfill.done}개 완료`}
+                  {backfill.failed > 0 && ` · ${backfill.failed}개 건너뜀`}
+                </div>
+              </>
+            )}
+
+            {!backfill.running && posterTargets.length > 0 && (
+              <div style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '10px', lineHeight: 1.6 }}>
+                영상을 한 번씩 받아야 해서 시간이 걸립니다. 와이파이에서 하시는 걸 권해요.
+                한 번 만들어 두면 앨범에서 영상 목록이 훨씬 빨라집니다.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: '16px 16px 0', maxWidth: '500px', margin: '0 auto' }}>
 
