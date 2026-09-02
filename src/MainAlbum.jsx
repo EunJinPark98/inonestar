@@ -625,8 +625,39 @@ function PhotoCard({ item, index }) {
   const [inView, setInView] = useState(
     () => typeof window === 'undefined' || !('IntersectionObserver' in window)
   );
+  // 재생을 누르면 포스터가 사라지고 영상 크기 정보가 들어올 때까지 박스가
+  // 잠깐 줄었다 커진다. 크기를 미리 붙잡아 두면 흔들리지 않는다.
+  const [boxHeight, setBoxHeight] = useState(null);
+  const [ratio, setRatio] = useState(null);
   const needsFrame = !photo && !hasPoster;
   const useFrame = needsFrame && inView;
+
+  const lockBoxHeight = () => {
+    const h = videoRef.current?.getBoundingClientRect().height;
+    if (h > 0) setBoxHeight(h);
+  };
+
+  const startPlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    lockBoxHeight();
+    if (useFrame && v.currentTime) v.currentTime = 0;
+    v.play();
+  };
+
+  // 포스터 비율로 박스를 못박아 두면, 영상이 로드돼도 크기가 변하지 않는다.
+  useEffect(() => {
+    if (!item.poster) return;
+    let alive = true;
+    const img = new Image();
+    img.onload = () => {
+      if (alive && img.naturalWidth && img.naturalHeight) {
+        setRatio(img.naturalWidth / img.naturalHeight);
+      }
+    };
+    img.src = item.poster;
+    return () => { alive = false; };
+  }, [item.poster]);
 
   useEffect(() => {
     if (!needsFrame || inView) return;
@@ -713,20 +744,19 @@ function PhotoCard({ item, index }) {
               onPlay={() => setPlaying(true)}
               onPause={() => setPlaying(false)}
               onEnded={() => setPlaying(false)}
+              onLoadedMetadata={lockBoxHeight}
               style={{
                 width: '100%',
                 display: 'block',
-                minHeight: hasPoster ? undefined : '220px',
+                aspectRatio: ratio ? String(ratio) : undefined,
+                minHeight: ratio
+                  ? undefined
+                  : (boxHeight ? `${boxHeight}px` : (hasPoster ? undefined : '220px')),
               }}
             />
             {!playing && (
               <div
-                onClick={() => {
-                  const v = videoRef.current;
-                  if (!v) return;
-                  if (useFrame && v.currentTime) v.currentTime = 0;
-                  v.play();
-                }}
+                onClick={startPlay}
                 style={{
                   position: 'absolute', inset: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
