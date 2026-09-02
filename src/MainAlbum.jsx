@@ -616,10 +616,38 @@ function PhotoCard({ item, index }) {
   const [loaded, setLoaded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef(null);
+  const wrapRef = useRef(null);
   const photo = isImage(item.url);
+  const hasPoster = Boolean(item.poster);
+
+  // 포스터가 없는 예전 영상은 첫 프레임을 받아 썸네일로 써야 한다.
+  // 목록에 들어오자마자 전부 받으면 느리니, 화면에 보일 때만 받는다.
+  const [inView, setInView] = useState(
+    () => typeof window === 'undefined' || !('IntersectionObserver' in window)
+  );
+  const needsFrame = !photo && !hasPoster;
+  const useFrame = needsFrame && inView;
+
+  useEffect(() => {
+    if (!needsFrame || inView) return;
+    const el = wrapRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        setInView(true);
+        io.disconnect();
+      });
+    }, { rootMargin: '300px 0px' });
+
+    io.observe(el);
+    return () => io.disconnect();
+  }, [needsFrame, inView]);
 
   return (
     <div
+      ref={wrapRef}
       className="photo-entry"
       style={{ animationDelay: `${index * 0.05}s` }}
     >
@@ -677,9 +705,9 @@ function PhotoCard({ item, index }) {
           <>
             <video
               ref={videoRef}
-              src={getVideoUrl(item.url)}
+              src={getVideoUrl(item.url) + (useFrame ? '#t=0.5' : '')}
               poster={item.poster || undefined}
-              preload="none"
+              preload={useFrame ? 'metadata' : 'none'}
               playsInline
               controls={playing}
               onPlay={() => setPlaying(true)}
@@ -688,14 +716,16 @@ function PhotoCard({ item, index }) {
               style={{
                 width: '100%',
                 display: 'block',
-                minHeight: item.poster ? undefined : '220px',
+                minHeight: hasPoster ? undefined : '220px',
               }}
             />
             {!playing && (
               <div
                 onClick={() => {
                   const v = videoRef.current;
-                  if (v) { v.play(); }
+                  if (!v) return;
+                  if (useFrame && v.currentTime) v.currentTime = 0;
+                  v.play();
                 }}
                 style={{
                   position: 'absolute', inset: 0,
