@@ -19,6 +19,8 @@ const getVideoUrl = (url) => {
   return '/functions/api/video/' + key;
 };
 
+const PAGE_SIZE = 10;
+
 const parseDate = (d) => new Date((d || '').replace(/\./g, '-'));
 
 const sortByDate = (items) =>
@@ -201,6 +203,7 @@ export default function MainAlbum() {
         />
       ) : (
         <PhotoDetailView
+          key={selectedFolder?.id}
           folder={selectedFolder}
           items={currentItems}
           onBack={() => navigate(null)}
@@ -431,6 +434,18 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
    Photo Detail View
    ═══════════════════════════════════ */
 function PhotoDetailView({ folder, items, onBack }) {
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const current = Math.min(page, totalPages);
+  const start = (current - 1) * PAGE_SIZE;
+  const pageItems = items.slice(start, start + PAGE_SIZE);
+
+  const goPage = (p) => {
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div style={{ maxWidth: '520px', margin: '0 auto' }}>
 
@@ -464,6 +479,7 @@ function PhotoDetailView({ folder, items, onBack }) {
             </div>
             <div style={{ fontSize: '11px', color: t.inkMuted }}>
               {folder?.label} · {items.length}개의 기록
+              {totalPages > 1 && ` · ${start + 1}–${start + pageItems.length}번째`}
             </div>
           </div>
         </div>
@@ -474,11 +490,14 @@ function PhotoDetailView({ folder, items, onBack }) {
         {items.length === 0 ? (
           <EmptyState />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {items.map((item, index) => (
-              <PhotoCard key={item.id || index} item={item} index={index} />
-            ))}
-          </div>
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {pageItems.map((item, index) => (
+                <PhotoCard key={item.id || start + index} item={item} index={index} />
+              ))}
+            </div>
+            <Pager current={current} total={totalPages} onChange={goPage} />
+          </>
         )}
 
         {/* Bottom back button */}
@@ -504,6 +523,88 @@ function PhotoDetailView({ folder, items, onBack }) {
       </div>
 
       <ScrollButtons />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
+   Pager — 10개씩 나눠 보기
+   ═══════════════════════════════════ */
+function Pager({ current, total, onChange }) {
+  if (total <= 1) return null;
+
+  // 페이지가 많아도 번호는 최대 5개만 보여준다.
+  const span = 5;
+  const to = Math.min(total, Math.max(1, current - 2) + span - 1);
+  const from = Math.max(1, to - span + 1);
+
+  const pages = [];
+  for (let p = from; p <= to; p++) pages.push(p);
+
+  const arrowStyle = (disabled) => ({
+    width: '34px', height: '34px',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: t.card,
+    border: `1px solid ${t.border}`,
+    borderRadius: '10px',
+    color: t.inkSoft,
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.4 : 1,
+  });
+
+  const ellipsis = (
+    <span style={{ color: t.inkMuted, fontSize: '12px', padding: '0 2px' }}>…</span>
+  );
+
+  return (
+    <div style={{
+      marginTop: '28px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      gap: '6px', flexWrap: 'wrap',
+    }}>
+      <button className="back-btn" aria-label="이전 페이지"
+        disabled={current === 1}
+        onClick={() => onChange(current - 1)}
+        style={arrowStyle(current === 1)}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+      </button>
+
+      {from > 1 && ellipsis}
+
+      {pages.map(p => (
+        <button key={p} className="back-btn"
+          onClick={() => onChange(p)}
+          aria-current={p === current ? 'page' : undefined}
+          style={{
+            minWidth: '34px', height: '34px', padding: '0 8px',
+            background: p === current ? t.accent : t.card,
+            border: `1px solid ${p === current ? t.accent : t.border}`,
+            borderRadius: '10px',
+            color: p === current ? '#FFFFFF' : t.inkSoft,
+            fontSize: '13px',
+            fontWeight: p === current ? '700' : '500',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          {p}
+        </button>
+      ))}
+
+      {to < total && ellipsis}
+
+      <button className="back-btn" aria-label="다음 페이지"
+        disabled={current === total}
+        onClick={() => onChange(current + 1)}
+        style={arrowStyle(current === total)}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -576,8 +677,9 @@ function PhotoCard({ item, index }) {
           <>
             <video
               ref={videoRef}
-              src={getVideoUrl(item.url) + '#t=0.5'}
-              preload="metadata"
+              src={getVideoUrl(item.url)}
+              poster={item.poster || undefined}
+              preload="none"
               playsInline
               controls={playing}
               onPlay={() => setPlaying(true)}
@@ -586,6 +688,7 @@ function PhotoCard({ item, index }) {
               style={{
                 width: '100%',
                 display: 'block',
+                minHeight: item.poster ? undefined : '220px',
               }}
             />
             {!playing && (

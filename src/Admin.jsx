@@ -100,6 +100,99 @@ const AdminStyles = () => (
   `}</style>
 );
 
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
+
+// R2에 올릴 파일 이름. 헤더로 보내야 하므로 ASCII로만 만든다.
+const makeKey = (name, suffix = '') => {
+  const raw = (name.split('.').pop() || '').toLowerCase();
+  const ext = /^[a-z0-9]{1,5}$/.test(raw) ? raw : 'bin';
+  return `${Date.now()}${suffix}.${ext}`;
+};
+
+// 본문을 그대로 보내 워커가 스트리밍으로 R2에 넘기게 한다.
+// 구버전 워커에는 이 경로가 없으므로 실패하면 기존 방식으로 돌아간다.
+const uploadBlob = async (blob, key, contentType, password) => {
+  try {
+    const res = await fetch('/functions/api/upload-raw', {
+      method: 'POST',
+      headers: {
+        'X-Password': password,
+        'X-Key': key,
+        'Content-Type': contentType || 'application/octet-stream',
+      },
+      body: blob,
+    });
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) return result;
+    }
+  } catch {
+    // 아래 폴백으로 진행
+  }
+
+  const formData = new FormData();
+  const file = blob instanceof File ? blob : new File([blob], key, { type: contentType });
+  formData.append('file', file);
+  formData.append('password', password);
+  const res = await fetch('/functions/api/upload', { method: 'POST', body: formData });
+  return res.json();
+};
+
+// 영상 첫 프레임을 뽑아 포스터 이미지를 만든다.
+// 목록에서 영상 본체를 받지 않고도 썸네일을 보여주기 위한 것.
+// 브라우저가 못 여는 코덱(HEVC .mov 등)이면 null을 돌려주고 조용히 넘어간다.
+const captureVideoPoster = (file) => new Promise((resolve) => {
+  let settled = false;
+  let objectUrl = '';
+  const video = document.createElement('video');
+
+  const finish = (blob) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    resolve(blob);
+  };
+
+  const timer = setTimeout(() => finish(null), 10000);
+
+  try {
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadedmetadata = () => {
+      const half = (video.duration || 1) / 2;
+      const target = Math.min(0.5, half);
+      video.currentTime = Number.isFinite(target) && target > 0 ? target : 0;
+    };
+
+    video.onseeked = () => {
+      try {
+        const w = video.videoWidth || 0;
+        const h = video.videoHeight || 0;
+        if (!w || !h) return finish(null);
+
+        const scale = Math.min(1, 720 / w);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => finish(blob), 'image/jpeg', 0.8);
+      } catch {
+        finish(null);
+      }
+    };
+
+    video.onerror = () => finish(null);
+
+    objectUrl = URL.createObjectURL(file);
+    video.src = objectUrl;
+  } catch {
+    finish(null);
+  }
+});
+
 export default function Admin() {
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -122,7 +215,7 @@ export default function Admin() {
   const [listPage, setListPage] = useState(0);
   const PER_PAGE = 20;
 
-  const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1' });
+  const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1', poster: '' });
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [saving, setSaving] = useState(false);
@@ -183,20 +276,28 @@ export default function Admin() {
     setUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('password', password);
+      const isVideo = !IMAGE_EXT.test(file.name);
+      const key = makeKey(file.name);
+      const result = await uploadBlob(file, key, file.type, password);
 
-      const res = await fetch('/functions/api/upload', { method: 'POST', body: formData });
-      const result = await res.json();
-
-      if (result.success) {
-        setNewPhoto(prev => ({ ...prev, url: result.url }));
-      } else {
-        showToast('업로드 실패: ' + result.error);
+      if (!result.success) {
+        showToast('업로드 실패: ' + (result.error || '알 수 없는 오류'));
         setPreviewUrl('');
+        return;
       }
-    } catch (err) {
+
+      let poster = '';
+      if (isVideo) {
+        const blob = await captureVideoPoster(file);
+        if (blob) {
+          const posterKey = makeKey(file.name, '_poster').replace(/\.[^.]+$/, '.jpg');
+          const posterRes = await uploadBlob(blob, posterKey, 'image/jpeg', password);
+          if (posterRes.success) poster = posterRes.url;
+        }
+      }
+
+      setNewPhoto(prev => ({ ...prev, url: result.url, poster }));
+    } catch {
       showToast('업로드 오류가 발생했어요');
       setPreviewUrl('');
     } finally {
@@ -212,7 +313,7 @@ export default function Admin() {
     }
 
     setPhotos([{ ...newPhoto, uploadedAt: Date.now() }, ...photos]);
-    setNewPhoto({ ...newPhoto, url: '', title: '', date: '' });
+    setNewPhoto({ ...newPhoto, url: '', title: '', date: '', poster: '' });
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -225,14 +326,17 @@ export default function Admin() {
     const item = photos[index];
     const updated = photos.filter((_, i) => i !== index);
 
-    // 1. R2에서 실제 파일 삭제
-    try {
-      await fetch('/functions/api/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, url: item.url })
-      });
-    } catch (_) {}
+    // 1. R2에서 실제 파일 삭제 (영상은 포스터 이미지도 함께)
+    for (const url of [item.url, item.poster]) {
+      if (!url) continue;
+      try {
+        await fetch('/functions/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, url })
+        });
+      } catch (_) {}
+    }
 
     // 2. KV 목록에서도 즉시 반영 (저장 버튼 없이 바로 반영)
     try {

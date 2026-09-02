@@ -131,7 +131,17 @@ async function handleUploadRaw(request, env) {
   }
 
   const key = request.headers.get('X-Key');
-  const contentType = request.headers.get('Content-Type') || 'video/mp4';
+  if (!key || !/^[A-Za-z0-9._-]{1,128}$/.test(key)) {
+    return Response.json({ success: false, error: '잘못된 파일 이름입니다.' }, { status: 400 });
+  }
+
+  if (!request.body) {
+    return Response.json({ success: false, error: '파일이 없습니다.' }, { status: 400 });
+  }
+
+  const contentType = request.headers.get('Content-Type') || 'application/octet-stream';
+
+  // 본문을 그대로 R2로 흘려보낸다. 큰 영상을 워커 메모리에 통째로 올리지 않기 위함.
   await env.PHOTO_BUCKET.put(key, request.body, {
     httpMetadata: { contentType }
   });
