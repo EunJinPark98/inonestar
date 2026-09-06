@@ -444,10 +444,20 @@ function PhotoDetailView({ folder, items, onBack }) {
   const start = (current - 1) * PAGE_SIZE;
   const pageItems = items.slice(start, start + PAGE_SIZE);
 
-  const goPage = (p) => {
-    setPage(p);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const goPage = (p) => setPage(p);
+
+  // 페이지를 넘기면 목록 맨 위에서 시작하도록 한다.
+  // 부드러운 스크롤은 목록이 길면 몇 초씩 걸리고, 그 사이 화면을 건드리면
+  // 중간에 멈춰버려서 바로 이동시킨다. 내용이 바뀐 뒤에 옮겨야 하므로
+  // 클릭 핸들러가 아니라 렌더 이후에 처리한다.
+  const isFirstPage = useRef(true);
+  useEffect(() => {
+    if (isFirstPage.current) {
+      isFirstPage.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [current]);
 
   return (
     <div style={{ maxWidth: '520px', margin: '0 auto' }}>
