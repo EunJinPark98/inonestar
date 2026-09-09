@@ -100,6 +100,9 @@ const AdminStyles = () => (
   `}</style>
 );
 
+const isParentFolder = (f) => f.parentId === null || f.parentId === undefined;
+const sameId = (a, b) => Number(a) === Number(b);
+
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif)$/i;
 
 // R2에 올릴 파일 이름. 헤더로 보내야 하므로 ASCII로만 만든다.
@@ -228,15 +231,20 @@ export default function Admin() {
   const [covers, setCovers] = useState({});
   const [adminLetters, setAdminLetters] = useState([]);
   const [folders, setFolders] = useState([
-    { id: 1, name: '신생아', label: '0개월' },
-    { id: 2, name: '1개월', label: '1개월' },
-    { id: 3, name: '2개월', label: '2개월' },
-    { id: 4, name: '3개월', label: '3개월' },
-    { id: 5, name: '4개월', label: '4개월' },
-    { id: 6, name: '5개월', label: '5개월' },
-    { id: 7, name: '6개월', label: '6개월' },
+    { id: 8, name: '0세', label: '0세', parentId: null },
+    { id: 1, name: '신생아', label: '0개월', parentId: 8 },
+    { id: 2, name: '1개월', label: '1개월', parentId: 8 },
+    { id: 3, name: '2개월', label: '2개월', parentId: 8 },
+    { id: 4, name: '3개월', label: '3개월', parentId: 8 },
+    { id: 5, name: '4개월', label: '4개월', parentId: 8 },
+    { id: 6, name: '5개월', label: '5개월', parentId: 8 },
+    { id: 7, name: '6개월', label: '6개월', parentId: 8 },
   ]);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newChildName, setNewChildName] = useState('');
+  const [newChildParent, setNewChildParent] = useState('');
+  const [uploadParent, setUploadParent] = useState('');
+  const [editParent, setEditParent] = useState('');
   const [listPage, setListPage] = useState(0);
   const PER_PAGE = 20;
 
@@ -477,6 +485,30 @@ export default function Admin() {
 
   const folderLabels = Object.fromEntries(folders.map(f => [String(f.id), f.name]));
 
+  const parentFolders = folders.filter(isParentFolder);
+  const findFolder = (id) => folders.find(f => sameId(f.id, id));
+  const childrenOf = (pid) => folders.filter(f => !isParentFolder(f) && sameId(f.parentId, pid));
+  const parentOf = (childId) => {
+    const f = findFolder(childId);
+    return f && !isParentFolder(f) ? findFolder(f.parentId) : null;
+  };
+
+  // 선택 상자에 쓸 값. 사용자가 아직 상위폴더를 고르지 않았으면
+  // 현재 폴더의 상위폴더를, 그것도 없으면 첫 상위폴더를 쓴다.
+  const resolveParent = (chosen, childId) =>
+    String(chosen || parentOf(childId)?.id || parentFolders[0]?.id || '');
+
+  const selectStyle = {
+    flex: 1, minWidth: 0,
+    padding: '11px 12px', fontSize: '14px',
+    borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+    background: theme.bg, color: theme.ink,
+    outline: 'none', fontFamily: 'inherit', cursor: 'pointer',
+  };
+
+  const uploadParentValue = resolveParent(uploadParent, newPhoto.folderId);
+  const uploadChildren = childrenOf(uploadParentValue);
+
   const saveFolders = async (next) => {
     setFolders(next);
     try {
@@ -488,23 +520,41 @@ export default function Admin() {
     } catch (_) {}
   };
 
-  const handleAddFolder = () => {
+  const nextFolderId = () =>
+    (folders.length ? Math.max(...folders.map(f => Number(f.id) || 0)) + 1 : 1);
+
+  const handleAddParentFolder = () => {
     const name = newFolderName.trim();
-    if (!name) { showToast('폴더 이름을 입력해 주세요'); return; }
-    const nextId = folders.length ? Math.max(...folders.map(f => Number(f.id))) + 1 : 1;
-    const next = [...folders, { id: nextId, name, label: name }];
-    saveFolders(next);
+    if (!name) { showToast('상위폴더 이름을 입력해 주세요'); return; }
+    saveFolders([...folders, { id: nextFolderId(), name, label: name, parentId: null }]);
     setNewFolderName('');
-    showToast('폴더를 추가했어요');
+    showToast('상위폴더를 추가했어요');
+  };
+
+  const handleAddChildFolder = () => {
+    const name = newChildName.trim();
+    const parentId = newChildParent || parentFolders[0]?.id;
+    if (!parentId) { showToast('먼저 상위폴더를 만들어 주세요'); return; }
+    if (!name) { showToast('하위폴더 이름을 입력해 주세요'); return; }
+    saveFolders([...folders, { id: nextFolderId(), name, label: name, parentId: Number(parentId) }]);
+    setNewChildName('');
+    showToast('하위폴더를 추가했어요');
   };
 
   const handleDeleteFolder = (id) => {
-    const count = photos.filter(p => Number(p.folderId) === Number(id)).length;
-    const msg = count > 0
-      ? `이 폴더에 ${count}개의 기록이 있어요.\n폴더를 삭제해도 사진/영상은 남아있지만 목록에서 보이지 않게 됩니다.\n삭제하시겠습니까?`
-      : '이 폴더를 삭제하시겠습니까?';
-    if (!window.confirm(msg)) return;
-    saveFolders(folders.filter(f => Number(f.id) !== Number(id)));
+    const folder = findFolder(id);
+    const kids = childrenOf(id);
+    const scopeIds = [id, ...kids.map(k => k.id)];
+    const count = photos.filter(p => scopeIds.some(sid => sameId(sid, p.folderId))).length;
+
+    const parts = [];
+    if (kids.length > 0) parts.push(`하위폴더 ${kids.length}개도 함께 삭제됩니다.`);
+    if (count > 0) parts.push(`기록 ${count}개가 목록에서 보이지 않게 됩니다.\n(사진·영상 파일 자체는 남아 있어요)`);
+    parts.push(`'${folder?.name}' 폴더를 삭제하시겠습니까?`);
+
+    if (!window.confirm(parts.join('\n\n'))) return;
+
+    saveFolders(folders.filter(f => !scopeIds.some(sid => sameId(sid, f.id))));
     showToast('폴더를 삭제했어요');
   };
 
@@ -727,25 +777,38 @@ export default function Admin() {
                 <span style={{ fontSize: '15px', fontWeight: '600', color: theme.ink }}>새 사진 등록</span>
               </div>
 
-              {/* Folder */}
+              {/* Folder — 상위 / 하위 */}
               <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px', letterSpacing: '0.02em' }}>
                 폴더
               </label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
-                {Object.entries(folderLabels).map(([id, name]) => (
-                  <button key={id} type="button" className="btn-press"
-                    onClick={() => setNewPhoto(prev => ({ ...prev, folderId: id }))}
-                    style={{
-                      padding: '7px 14px', fontSize: '13px', fontWeight: '500',
-                      border: 'none', borderRadius: theme.radiusFull, cursor: 'pointer',
-                      background: newPhoto.folderId === id ? theme.primary : theme.borderLight,
-                      color: newPhoto.folderId === id ? 'white' : theme.inkSoft,
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {name}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
+                <select
+                  value={uploadParentValue}
+                  onChange={e => {
+                    const pid = e.target.value;
+                    setUploadParent(pid);
+                    const first = childrenOf(pid)[0];
+                    setNewPhoto(prev => ({ ...prev, folderId: first ? String(first.id) : '' }));
+                  }}
+                  style={selectStyle}
+                >
+                  {parentFolders.length === 0 && <option value="">상위폴더 없음</option>}
+                  {parentFolders.map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={String(newPhoto.folderId || '')}
+                  onChange={e => setNewPhoto(prev => ({ ...prev, folderId: e.target.value }))}
+                  style={selectStyle}
+                >
+                  {uploadChildren.length === 0
+                    ? <option value="">하위폴더 없음</option>
+                    : uploadChildren.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                </select>
               </div>
 
               {/* Photo Upload */}
@@ -1072,9 +1135,11 @@ export default function Admin() {
                           if (editIndex === index) {
                             setEditIndex(null);
                             setEditData(null);
+                            setEditParent('');
                           } else {
                             setEditIndex(index);
                             setEditData({ ...item });
+                            setEditParent('');
                           }
                         }}
                       >
@@ -1093,6 +1158,7 @@ export default function Admin() {
                       </div>
                       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                         <button onClick={() => {
+                          setEditParent('');
                           if (editIndex === index) { setEditIndex(null); setEditData(null); }
                           else { setEditIndex(index); setEditData({ ...item }); }
                         }} className="btn-press" style={{
@@ -1147,18 +1213,34 @@ export default function Admin() {
                         </div>
                         <div style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '11px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '6px' }}>폴더</label>
-                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                            {Object.entries(folderLabels).map(([id, name]) => (
-                              <button key={id} type="button" className="btn-press"
-                                onClick={() => setEditData({ ...editData, folderId: id })}
-                                style={{
-                                  padding: '5px 11px', fontSize: '12px', fontWeight: '500',
-                                  border: 'none', borderRadius: theme.radiusFull, cursor: 'pointer',
-                                  background: editData.folderId === id ? theme.primary : theme.borderLight,
-                                  color: editData.folderId === id ? 'white' : theme.inkSoft,
-                                }}
-                              >{name}</button>
-                            ))}
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <select
+                              value={resolveParent(editParent, editData.folderId)}
+                              onChange={e => {
+                                const pid = e.target.value;
+                                setEditParent(pid);
+                                const first = childrenOf(pid)[0];
+                                setEditData({ ...editData, folderId: first ? String(first.id) : '' });
+                              }}
+                              style={{ ...selectStyle, padding: '9px 10px', fontSize: '13px' }}
+                            >
+                              {parentFolders.length === 0 && <option value="">상위폴더 없음</option>}
+                              {parentFolders.map(f => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={String(editData.folderId || '')}
+                              onChange={e => setEditData({ ...editData, folderId: e.target.value })}
+                              style={{ ...selectStyle, padding: '9px 10px', fontSize: '13px' }}
+                            >
+                              {childrenOf(resolveParent(editParent, editData.folderId)).length === 0
+                                ? <option value="">하위폴더 없음</option>
+                                : childrenOf(resolveParent(editParent, editData.folderId)).map(f => (
+                                    <option key={f.id} value={f.id}>{f.name}</option>
+                                  ))}
+                            </select>
                           </div>
                         </div>
                         {/* Cover image toggle */}
@@ -1365,7 +1447,40 @@ export default function Admin() {
               사진 등록으로 돌아가기
             </button>
 
-            {/* Add folder */}
+            {/* 상위폴더 만들기 */}
+            <div style={{
+              background: theme.card,
+              borderRadius: theme.radius,
+              boxShadow: theme.shadow,
+              padding: '16px',
+              marginBottom: '12px',
+            }}>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '8px' }}>
+                상위폴더 만들기
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="예: 1세, 2세"
+                  value={newFolderName}
+                  onChange={e => setNewFolderName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddParentFolder(); }}
+                  className="input-field"
+                  style={{
+                    flex: 1, minWidth: 0, padding: '11px 12px', fontSize: '14px',
+                    borderRadius: '8px', border: `1.5px solid ${theme.border}`,
+                    background: theme.bg, outline: 'none',
+                  }}
+                />
+                <button className="btn-press" onClick={handleAddParentFolder} style={{
+                  padding: '0 18px', fontSize: '14px', fontWeight: '600',
+                  background: theme.primary, color: '#fff', border: 'none',
+                  borderRadius: '8px', cursor: 'pointer', flexShrink: 0,
+                }}>추가</button>
+              </div>
+            </div>
+
+            {/* 하위폴더 만들기 */}
             <div style={{
               background: theme.card,
               borderRadius: theme.radius,
@@ -1374,75 +1489,150 @@ export default function Admin() {
               marginBottom: '16px',
             }}>
               <label style={{ fontSize: '12px', fontWeight: '600', color: theme.inkSoft, display: 'block', marginBottom: '8px' }}>
-                새 폴더 만들기
+                하위폴더 만들기
               </label>
+              <select
+                value={String(newChildParent || parentFolders[0]?.id || '')}
+                onChange={e => setNewChildParent(e.target.value)}
+                style={{ ...selectStyle, width: '100%', marginBottom: '8px' }}
+              >
+                {parentFolders.length === 0
+                  ? <option value="">먼저 상위폴더를 만들어 주세요</option>
+                  : parentFolders.map(f => (
+                      <option key={f.id} value={f.id}>{f.name} 안에</option>
+                    ))}
+              </select>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input
                   type="text"
                   placeholder="예: 7개월, 첫 여행"
-                  value={newFolderName}
-                  onChange={e => setNewFolderName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleAddFolder(); }}
+                  value={newChildName}
+                  onChange={e => setNewChildName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddChildFolder(); }}
                   className="input-field"
                   style={{
-                    flex: 1, padding: '11px 12px', fontSize: '14px',
+                    flex: 1, minWidth: 0, padding: '11px 12px', fontSize: '14px',
                     borderRadius: '8px', border: `1.5px solid ${theme.border}`,
                     background: theme.bg, outline: 'none',
                   }}
                 />
-                <button className="btn-press" onClick={handleAddFolder} style={{
-                  padding: '0 18px', fontSize: '14px', fontWeight: '600',
-                  background: theme.primary, color: '#fff', border: 'none',
-                  borderRadius: '8px', cursor: 'pointer', flexShrink: 0,
-                }}>추가</button>
+                <button className="btn-press" onClick={handleAddChildFolder}
+                  disabled={parentFolders.length === 0}
+                  style={{
+                    padding: '0 18px', fontSize: '14px', fontWeight: '600',
+                    background: parentFolders.length === 0 ? theme.borderLight : theme.primary,
+                    color: parentFolders.length === 0 ? theme.inkMuted : '#fff',
+                    border: 'none', borderRadius: '8px',
+                    cursor: parentFolders.length === 0 ? 'default' : 'pointer', flexShrink: 0,
+                  }}>추가</button>
               </div>
             </div>
 
-            {/* Folder list */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {folders.map((folder) => {
-                const count = photos.filter(p => Number(p.folderId) === Number(folder.id)).length;
+            {/* 폴더 목록 — 상위폴더 아래 하위폴더 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {parentFolders.map((parent) => {
+                const kids = childrenOf(parent.id);
+                const parentCount = photos.filter(ph =>
+                  [parent.id, ...kids.map(k => k.id)].some(sid => sameId(sid, ph.folderId))
+                ).length;
+
                 return (
-                  <div key={folder.id} style={{
-                    background: theme.card,
-                    borderRadius: theme.radiusSm,
-                    boxShadow: theme.shadow,
-                    padding: '12px 14px',
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                  }}>
-                    <span style={{ fontSize: '18px' }}>📁</span>
-                    <input
-                      type="text"
-                      defaultValue={folder.name}
-                      onBlur={e => {
-                        const v = e.target.value.trim();
-                        if (v && v !== folder.name) handleRenameFolder(folder.id, v);
-                      }}
-                      className="input-field"
-                      style={{
-                        flex: 1, minWidth: 0, padding: '8px 10px', fontSize: '14px', fontWeight: '600',
-                        color: theme.ink, borderRadius: '6px',
-                        border: `1.5px solid transparent`, background: 'transparent', outline: 'none',
-                      }}
-                    />
-                    <span style={{
-                      fontSize: '11px', color: theme.inkMuted,
-                      background: theme.borderLight, padding: '2px 8px',
-                      borderRadius: theme.radiusFull, flexShrink: 0,
-                    }}>{count}개</span>
-                    <button className="btn-press" onClick={() => handleDeleteFolder(folder.id)} style={{
-                      width: '30px', height: '30px',
-                      background: theme.dangerSoft, border: 'none', borderRadius: '7px',
-                      color: theme.danger, fontSize: '13px', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>✕</button>
+                  <div key={parent.id}>
+                    {/* 상위폴더 */}
+                    <div style={{
+                      background: theme.card,
+                      borderRadius: theme.radiusSm,
+                      boxShadow: theme.shadow,
+                      padding: '12px 14px',
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      border: `1.5px solid ${theme.borderLight}`,
+                    }}>
+                      <span style={{ fontSize: '18px' }}>🗂️</span>
+                      <input
+                        type="text"
+                        defaultValue={parent.name}
+                        onBlur={e => {
+                          const v = e.target.value.trim();
+                          if (v && v !== parent.name) handleRenameFolder(parent.id, v);
+                        }}
+                        className="input-field"
+                        style={{
+                          flex: 1, minWidth: 0, padding: '8px 10px', fontSize: '14px', fontWeight: '700',
+                          color: theme.ink, borderRadius: '6px',
+                          border: '1.5px solid transparent', background: 'transparent', outline: 'none',
+                        }}
+                      />
+                      <span style={{
+                        fontSize: '11px', color: theme.inkMuted,
+                        background: theme.borderLight, padding: '2px 8px',
+                        borderRadius: theme.radiusFull, flexShrink: 0,
+                      }}>{kids.length}폴더 · {parentCount}개</span>
+                      <button className="btn-press" onClick={() => handleDeleteFolder(parent.id)} style={{
+                        width: '30px', height: '30px',
+                        background: theme.dangerSoft, border: 'none', borderRadius: '7px',
+                        color: theme.danger, fontSize: '13px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>✕</button>
+                    </div>
+
+                    {/* 하위폴더 */}
+                    {kids.length === 0 ? (
+                      <div style={{
+                        fontSize: '11px', color: theme.inkMuted,
+                        padding: '8px 0 0 30px',
+                      }}>
+                        하위폴더가 없어요
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px', paddingLeft: '20px' }}>
+                        {kids.map((folder) => {
+                          const count = photos.filter(ph => sameId(ph.folderId, folder.id)).length;
+                          return (
+                            <div key={folder.id} style={{
+                              background: theme.card,
+                              borderRadius: theme.radiusSm,
+                              boxShadow: theme.shadow,
+                              padding: '10px 12px',
+                              display: 'flex', alignItems: 'center', gap: '8px',
+                            }}>
+                              <span style={{ fontSize: '15px' }}>📁</span>
+                              <input
+                                type="text"
+                                defaultValue={folder.name}
+                                onBlur={e => {
+                                  const v = e.target.value.trim();
+                                  if (v && v !== folder.name) handleRenameFolder(folder.id, v);
+                                }}
+                                className="input-field"
+                                style={{
+                                  flex: 1, minWidth: 0, padding: '7px 9px', fontSize: '13px', fontWeight: '600',
+                                  color: theme.ink, borderRadius: '6px',
+                                  border: '1.5px solid transparent', background: 'transparent', outline: 'none',
+                                }}
+                              />
+                              <span style={{
+                                fontSize: '11px', color: theme.inkMuted,
+                                background: theme.borderLight, padding: '2px 8px',
+                                borderRadius: theme.radiusFull, flexShrink: 0,
+                              }}>{count}개</span>
+                              <button className="btn-press" onClick={() => handleDeleteFolder(folder.id)} style={{
+                                width: '28px', height: '28px',
+                                background: theme.dangerSoft, border: 'none', borderRadius: '7px',
+                                color: theme.danger, fontSize: '12px', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                              }}>✕</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
             <p style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '12px', lineHeight: 1.6, textAlign: 'center' }}>
-              폴더 이름을 눌러 수정할 수 있어요.<br />변경사항은 자동으로 저장됩니다.
+              폴더 이름을 눌러 수정할 수 있어요.<br />상위폴더를 지우면 그 안의 하위폴더도 함께 지워집니다.<br />변경사항은 자동으로 저장됩니다.
             </p>
           </>
         )}

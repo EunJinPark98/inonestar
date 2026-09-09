@@ -166,9 +166,26 @@ async function handleSaveCovers(request, env) {
   return Response.json({ success: true });
 }
 
+// 폴더는 parentId 로 상위/하위를 구분한다. parentId 가 null 이면 상위폴더.
+// 예전 데이터에는 parentId 자체가 없으므로, 읽을 때 '0세' 상위폴더를 만들어
+// 기존 폴더들을 그 아래로 넣는다. 같은 입력이면 항상 같은 결과가 나온다.
+function normalizeFolders(list) {
+  if (!Array.isArray(list) || list.length === 0) return [];
+
+  const isLegacy = list.every(f => f.parentId === undefined);
+  if (!isLegacy) return list;
+
+  const rootId = Math.max(...list.map(f => Number(f.id) || 0)) + 1;
+  return [
+    { id: rootId, name: '0세', label: '0세', parentId: null },
+    ...list.map(f => ({ ...f, parentId: rootId })),
+  ];
+}
+
 async function handleGetFolders(env) {
   const data = await env.ALBUM_KV.get(FOLDERS_KEY);
-  return Response.json(data ? JSON.parse(data) : DEFAULT_FOLDERS);
+  const stored = data ? JSON.parse(data) : DEFAULT_FOLDERS;
+  return Response.json(normalizeFolders(stored));
 }
 
 async function handleSaveFolders(request, env) {
@@ -178,7 +195,7 @@ async function handleSaveFolders(request, env) {
     return Response.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
   }
 
-  await env.ALBUM_KV.put(FOLDERS_KEY, JSON.stringify(body.folders || DEFAULT_FOLDERS));
+  await env.ALBUM_KV.put(FOLDERS_KEY, JSON.stringify(normalizeFolders(body.folders || DEFAULT_FOLDERS)));
   return Response.json({ success: true });
 }
 

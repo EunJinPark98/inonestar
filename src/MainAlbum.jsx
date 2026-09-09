@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 
+// parentId 가 null 이면 상위폴더, 값이 있으면 그 폴더의 하위폴더.
 const DEFAULT_FOLDERS = [
-  { id: 1, name: '신생아', label: '0개월' },
-  { id: 2, name: '1개월', label: '1개월' },
-  { id: 3, name: '2개월', label: '2개월' },
-  { id: 4, name: '3개월', label: '3개월' },
-  { id: 5, name: '4개월', label: '4개월' },
-  { id: 6, name: '5개월', label: '5개월' },
-  { id: 7, name: '6개월', label: '6개월' },
+  { id: 8, name: '0세', label: '0세', parentId: null },
+  { id: 1, name: '신생아', label: '0개월', parentId: 8 },
+  { id: 2, name: '1개월', label: '1개월', parentId: 8 },
+  { id: 3, name: '2개월', label: '2개월', parentId: 8 },
+  { id: 4, name: '3개월', label: '3개월', parentId: 8 },
+  { id: 5, name: '4개월', label: '4개월', parentId: 8 },
+  { id: 6, name: '5개월', label: '5개월', parentId: 8 },
+  { id: 7, name: '6개월', label: '6개월', parentId: 8 },
 ];
+
+const isParent = (f) => f.parentId === null || f.parentId === undefined;
+const sameId = (a, b) => Number(a) === Number(b);
 
 const isImage = (url) => /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(url || '');
 
@@ -126,6 +131,7 @@ const Styles = () => (
 );
 
 export default function MainAlbum() {
+  const [currentParent, setCurrentParent] = useState(null);
   const [currentFolder, setCurrentFolder] = useState(null);
   const [page, setPage] = useState('album');
   const [photos, setPhotos] = useState([]);
@@ -153,10 +159,10 @@ export default function MainAlbum() {
       .catch(() => {});
   }, []);
 
-  const hasNewLetter = useMemo(() => {
-    const now = Date.now();
-    return letters.some(l => l.id && (now - l.id < 24 * 60 * 60 * 1000));
-  }, [letters]);
+  // NEW 배지 기준 시각. 렌더마다 한 번만 읽어 화면 전체가 같은 기준을 쓴다.
+  const now = Date.now();
+  const isNew = (ts) => Boolean(ts) && now - ts < 24 * 60 * 60 * 1000;
+  const hasNewLetter = letters.some(l => isNew(l.id));
 
   const allFolderItems = useMemo(() => {
     const result = {};
@@ -167,8 +173,23 @@ export default function MainAlbum() {
     return result;
   }, [photos, folders]);
 
+  const parentFolders = useMemo(() => folders.filter(isParent), [folders]);
+
+  const childrenByParent = useMemo(() => {
+    const map = {};
+    parentFolders.forEach(p => { map[p.id] = []; });
+    folders.forEach(f => {
+      if (isParent(f)) return;
+      if (!map[f.parentId]) map[f.parentId] = [];
+      map[f.parentId].push(f);
+    });
+    return map;
+  }, [folders, parentFolders]);
+
   const currentItems = currentFolder ? (allFolderItems[currentFolder] || []) : [];
-  const selectedFolder = folders.find(f => f.id === currentFolder);
+  const selectedFolder = folders.find(f => sameId(f.id, currentFolder));
+  const selectedParent = folders.find(f => sameId(f.id, currentParent));
+  const currentChildren = currentParent !== null ? (childrenByParent[currentParent] || []) : [];
 
   const getCoverImage = (folderId) => {
     if (covers[String(folderId)]) return covers[String(folderId)];
@@ -177,45 +198,60 @@ export default function MainAlbum() {
     return img ? img.url : null;
   };
 
-  const navigate = (id) => {
+  // 화면 전환은 살짝 사라졌다 나타나는 효과를 위해 한 박자 뒤에 바꾼다.
+  const transitionTo = (fn) => {
     setTransitioning(true);
     setTimeout(() => {
-      setCurrentFolder(id);
+      fn();
       setTransitioning(false);
       window.scrollTo({ top: 0 });
     }, 150);
   };
 
-  const goToPage = (p) => {
-    setTransitioning(true);
-    setTimeout(() => {
-      setPage(p);
-      setCurrentFolder(null);
-      setTransitioning(false);
-      window.scrollTo({ top: 0 });
-    }, 150);
-  };
+  const openParent = (id) => transitionTo(() => setCurrentParent(id));
+  const openFolder = (id) => transitionTo(() => setCurrentFolder(id));
+  const backToParents = () => transitionTo(() => { setCurrentParent(null); setCurrentFolder(null); });
+  const backToChildren = () => transitionTo(() => setCurrentFolder(null));
+
+  const goToPage = (p) => transitionTo(() => {
+    setPage(p);
+    setCurrentParent(null);
+    setCurrentFolder(null);
+  });
 
   return (
     <div className="album-root" style={{ opacity: transitioning ? 0 : 1, transition: 'opacity 0.15s ease' }}>
       <Styles />
       {page === 'letters' ? (
         <LettersView onBack={() => goToPage('album')} />
-      ) : currentFolder === null ? (
-        <FolderListView
-          folders={folders}
-          allFolderItems={allFolderItems}
-          getCoverImage={getCoverImage}
-          onSelect={navigate}
-          onLetters={() => goToPage('letters')}
-          hasNewLetter={hasNewLetter}
-        />
-      ) : (
+      ) : currentFolder !== null ? (
         <PhotoDetailView
           key={selectedFolder?.id}
           folder={selectedFolder}
+          parent={selectedParent}
           items={currentItems}
-          onBack={() => navigate(null)}
+          onBack={backToChildren}
+        />
+      ) : currentParent !== null ? (
+        <ChildFolderView
+          parent={selectedParent}
+          folders={currentChildren}
+          isNew={isNew}
+          allFolderItems={allFolderItems}
+          getCoverImage={getCoverImage}
+          onSelect={openFolder}
+          onBack={backToParents}
+        />
+      ) : (
+        <FolderListView
+          parents={parentFolders}
+          childrenByParent={childrenByParent}
+          isNew={isNew}
+          allFolderItems={allFolderItems}
+          getCoverImage={getCoverImage}
+          onSelect={openParent}
+          onLetters={() => goToPage('letters')}
+          hasNewLetter={hasNewLetter}
         />
       )}
     </div>
@@ -225,7 +261,25 @@ export default function MainAlbum() {
 /* ═══════════════════════════════════
    Folder List (Home)
    ═══════════════════════════════════ */
-function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLetters, hasNewLetter }) {
+function FolderListView({ parents, childrenByParent, allFolderItems, getCoverImage, isNew, onSelect, onLetters, hasNewLetter }) {
+  // 상위폴더의 기록 수·커버·NEW 여부는 하위폴더들을 합쳐서 구한다.
+  const summarize = (parent) => {
+    const kids = childrenByParent[parent.id] || [];
+    const scope = kids.length ? kids : [parent];
+    let count = 0;
+    let hasNew = false;
+    let cover = getCoverImage(parent.id);
+
+    scope.forEach(f => {
+      const items = allFolderItems[f.id] || [];
+      count += items.length;
+      if (!cover) cover = getCoverImage(f.id);
+      if (items.some(i => isNew(i.uploadedAt))) hasNew = true;
+    });
+
+    return { count, cover, hasNew, childCount: kids.length };
+  };
+
   return (
     <div style={{ maxWidth: '520px', margin: '0 auto' }}>
 
@@ -273,115 +327,81 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
 
       {/* Folder Cards */}
       <div style={{ padding: '0 20px 60px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {folders.map((folder, idx) => {
-            const items = allFolderItems[folder.id] || [];
-            const count = items.length;
-            const cover = getCoverImage(folder.id);
-            const hasPhotos = count > 0;
-            const now = Date.now();
-            const hasNew = items.some(item =>
-              item.uploadedAt && (now - item.uploadedAt < 24 * 60 * 60 * 1000)
-            );
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px',
+        }}>
+          {parents.map((parent, idx) => {
+            const { count, cover, hasNew, childCount } = summarize(parent);
 
             return (
-              <div key={folder.id}
+              <div key={parent.id}
                 className="folder-card fade-up"
                 style={{
                   animationDelay: `${idx * 0.05}s`,
                   background: t.card,
-                  borderRadius: '14px',
+                  borderRadius: '16px',
                   boxShadow: t.shadow,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  alignItems: 'stretch',
-                  minHeight: '80px',
                   border: `1px solid ${t.border}`,
+                  overflow: 'hidden',
                 }}
-                onClick={() => onSelect(folder.id)}
+                onClick={() => onSelect(parent.id)}
               >
-                {/* Thumbnail */}
+                {/* Cover */}
                 <div style={{
-                  width: '80px',
-                  flexShrink: 0,
+                  position: 'relative',
+                  aspectRatio: '1 / 1',
                   background: cover
                     ? `url(${cover}) center/cover`
                     : `linear-gradient(135deg, ${t.warm1} 0%, ${t.warm2} 100%)`,
-                  position: 'relative',
                 }}>
                   {!cover && (
                     <div style={{
                       position: 'absolute', inset: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: t.inkMuted, fontSize: '20px', opacity: 0.35,
+                      color: t.inkMuted, opacity: 0.35,
                     }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="3" y="3" width="18" height="18" rx="2" />
                         <circle cx="8.5" cy="8.5" r="1.5" />
                         <path d="m21 15-5-5L5 21" />
                       </svg>
                     </div>
                   )}
+
+                  {hasNew && (
+                    <span style={{
+                      position: 'absolute', top: '8px', right: '8px',
+                      fontSize: '9px', fontWeight: '700', color: '#fff',
+                      background: '#E85D4A', padding: '2px 7px',
+                      borderRadius: '9999px', letterSpacing: '0.04em',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                    }}>
+                      NEW
+                    </span>
+                  )}
                 </div>
 
                 {/* Info */}
-                <div style={{
-                  flex: 1,
-                  padding: '13px 14px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'center',
-                }}>
-                  <div style={{
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    color: hasPhotos ? t.sage : t.inkMuted,
-                    letterSpacing: '0.06em',
-                    marginBottom: '3px',
-                    textTransform: 'uppercase',
+                <div style={{ padding: '12px 12px 14px' }}>
+                  <div className="serif" style={{
+                    fontSize: '16px',
+                    fontWeight: '500',
+                    color: t.ink,
+                    lineHeight: 1.3,
                   }}>
-                    {folder.label}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                    <span className="serif" style={{
-                      fontSize: '16px',
-                      fontWeight: '500',
-                      color: t.ink,
-                    }}>
-                      {folder.name}
-                    </span>
-                    {hasNew && (
-                      <span style={{
-                        fontSize: '9px',
-                        fontWeight: '700',
-                        color: '#fff',
-                        background: '#E85D4A',
-                        padding: '1px 6px',
-                        borderRadius: '9999px',
-                        letterSpacing: '0.04em',
-                      }}>
-                        NEW
-                      </span>
-                    )}
+                    {parent.name}
                   </div>
                   <div style={{
                     fontSize: '11px',
                     color: t.inkMuted,
+                    marginTop: '4px',
                   }}>
-                    {hasPhotos ? `${count}개의 기록` : '아직 기록이 없어요'}
+                    {childCount > 0
+                      ? `폴더 ${childCount}개 · 기록 ${count}개`
+                      : (count > 0 ? `${count}개의 기록` : '아직 기록이 없어요')}
                   </div>
-                </div>
-
-                {/* Arrow */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  paddingRight: '14px',
-                  color: t.inkMuted,
-                }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
                 </div>
               </div>
             );
@@ -440,9 +460,189 @@ function FolderListView({ folders, allFolderItems, getCoverImage, onSelect, onLe
 }
 
 /* ═══════════════════════════════════
+   Child Folder List — 상위폴더 안의 하위폴더들
+   ═══════════════════════════════════ */
+function ChildFolderView({ parent, folders, allFolderItems, getCoverImage, isNew, onSelect, onBack }) {
+  return (
+    <div style={{ maxWidth: '520px', margin: '0 auto' }}>
+
+      {/* Sticky Header */}
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 10,
+        background: 'rgba(250,248,245,0.88)',
+        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: `1px solid ${t.border}`,
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          padding: '12px 16px', gap: '12px',
+        }}>
+          <button className="back-btn" onClick={onBack} style={{
+            width: '34px', height: '34px',
+            background: t.warm1, border: 'none', borderRadius: '10px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: t.inkSoft,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <div>
+            <div className="serif" style={{ fontSize: '15px', fontWeight: '600', color: t.ink }}>
+              {parent?.name}
+            </div>
+            <div style={{ fontSize: '11px', color: t.inkMuted }}>
+              {folders.length}개의 폴더
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding: '20px 16px 60px' }}>
+        {folders.length === 0 ? (
+          <div className="fade-up" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{
+              width: '56px', height: '56px',
+              margin: '0 auto 14px',
+              background: t.warm1, borderRadius: '14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: t.inkMuted,
+            }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+              </svg>
+            </div>
+            <p className="serif" style={{ fontSize: '15px', color: t.inkSoft, lineHeight: 1.6 }}>
+              아직 하위 폴더가 없어요
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {folders.map((folder, idx) => {
+              const items = allFolderItems[folder.id] || [];
+              const count = items.length;
+              const cover = getCoverImage(folder.id);
+              const hasPhotos = count > 0;
+              const hasNew = items.some(item => isNew(item.uploadedAt));
+
+              return (
+                <div key={folder.id}
+                  className="folder-card fade-up"
+                  style={{
+                    animationDelay: `${idx * 0.05}s`,
+                    background: t.card,
+                    borderRadius: '14px',
+                    boxShadow: t.shadow,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    minHeight: '80px',
+                    border: `1px solid ${t.border}`,
+                  }}
+                  onClick={() => onSelect(folder.id)}
+                >
+                  {/* Thumbnail */}
+                  <div style={{
+                    width: '80px',
+                    flexShrink: 0,
+                    background: cover
+                      ? `url(${cover}) center/cover`
+                      : `linear-gradient(135deg, ${t.warm1} 0%, ${t.warm2} 100%)`,
+                    position: 'relative',
+                  }}>
+                    {!cover && (
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: t.inkMuted, opacity: 0.35,
+                      }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <path d="m21 15-5-5L5 21" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{
+                    flex: 1,
+                    padding: '13px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                  }}>
+                    <div style={{
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      color: hasPhotos ? t.sage : t.inkMuted,
+                      letterSpacing: '0.06em',
+                      marginBottom: '3px',
+                      textTransform: 'uppercase',
+                    }}>
+                      {folder.label}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                      <span className="serif" style={{ fontSize: '16px', fontWeight: '500', color: t.ink }}>
+                        {folder.name}
+                      </span>
+                      {hasNew && (
+                        <span style={{
+                          fontSize: '9px', fontWeight: '700', color: '#fff',
+                          background: '#E85D4A', padding: '1px 6px',
+                          borderRadius: '9999px', letterSpacing: '0.04em',
+                        }}>
+                          NEW
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: t.inkMuted }}>
+                      {hasPhotos ? `${count}개의 기록` : '아직 기록이 없어요'}
+                    </div>
+                  </div>
+
+                  {/* Arrow */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center',
+                    paddingRight: '14px', color: t.inkMuted,
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button className="back-btn" onClick={onBack} style={{
+          width: '100%',
+          marginTop: '24px',
+          padding: '14px',
+          background: t.card,
+          border: `1px solid ${t.border}`,
+          borderRadius: '12px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          color: t.inkSoft,
+          fontSize: '14px', fontWeight: '500',
+          boxShadow: t.shadow,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          목록으로 돌아가기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════
    Photo Detail View
    ═══════════════════════════════════ */
-function PhotoDetailView({ folder, items, onBack }) {
+function PhotoDetailView({ folder, parent, items, onBack }) {
   const [page, setPage] = useState(1);
 
   const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
@@ -497,7 +697,7 @@ function PhotoDetailView({ folder, items, onBack }) {
               {folder?.name}
             </div>
             <div style={{ fontSize: '11px', color: t.inkMuted }}>
-              {folder?.label} · {items.length}개의 기록
+              {parent?.name ? `${parent.name} · ` : ''}{folder?.label} · {items.length}개의 기록
               {totalPages > 1 && ` · ${start + 1}–${start + pageItems.length}번째`}
             </div>
           </div>
