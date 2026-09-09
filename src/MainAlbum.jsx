@@ -83,7 +83,7 @@ const Styles = () => (
       100% { background-position: 200% 0; }
     }
 
-    .fade-up  { animation: fadeUp 0.5s ease both; }
+    .fade-up  { animation: fadeUp 0.24s ease both; }
 
     .folder-card {
       transition: all 0.2s ease;
@@ -94,7 +94,7 @@ const Styles = () => (
     }
 
     .photo-entry {
-      animation: fadeUp 0.5s ease both;
+      animation: fadeUp 0.24s ease both;
     }
 
     .back-btn {
@@ -138,7 +138,6 @@ export default function MainAlbum() {
   const [covers, setCovers] = useState({});
   const [letters, setLetters] = useState([]);
   const [folders, setFolders] = useState(DEFAULT_FOLDERS);
-  const [transitioning, setTransitioning] = useState(false);
 
   useEffect(() => {
     fetch('/functions/api')
@@ -198,14 +197,11 @@ export default function MainAlbum() {
     return img ? img.url : null;
   };
 
-  // 화면 전환은 살짝 사라졌다 나타나는 효과를 위해 한 박자 뒤에 바꾼다.
+  // 화면을 바로 바꾼다. 예전에는 전체를 흐리게 했다가 되돌리느라
+  // 하위폴더가 보이기까지 시간이 더 걸렸다. 등장 효과는 카드별 애니메이션이 맡는다.
   const transitionTo = (fn) => {
-    setTransitioning(true);
-    setTimeout(() => {
-      fn();
-      setTransitioning(false);
-      window.scrollTo({ top: 0 });
-    }, 150);
+    fn();
+    window.scrollTo({ top: 0 });
   };
 
   const openParent = (id) => transitionTo(() => setCurrentParent(id));
@@ -220,7 +216,7 @@ export default function MainAlbum() {
   });
 
   return (
-    <div className="album-root" style={{ opacity: transitioning ? 0 : 1, transition: 'opacity 0.15s ease' }}>
+    <div className="album-root">
       <Styles />
       {page === 'letters' ? (
         <LettersView onBack={() => goToPage('album')} />
@@ -339,7 +335,7 @@ function FolderListView({ parents, childrenByParent, allFolderItems, getCoverIma
               <div key={parent.id}
                 className="folder-card fade-up"
                 style={{
-                  animationDelay: `${idx * 0.05}s`,
+                  animationDelay: `${Math.min(idx, 5) * 0.02}s`,
                   background: t.card,
                   borderRadius: '16px',
                   boxShadow: t.shadow,
@@ -529,7 +525,7 @@ function ChildFolderView({ parent, folders, allFolderItems, getCoverImage, isNew
                 <div key={folder.id}
                   className="folder-card fade-up"
                   style={{
-                    animationDelay: `${idx * 0.05}s`,
+                    animationDelay: `${Math.min(idx, 5) * 0.02}s`,
                     background: t.card,
                     borderRadius: '14px',
                     boxShadow: t.shadow,
@@ -904,7 +900,7 @@ function PhotoCard({ item, index }) {
     <div
       ref={wrapRef}
       className="photo-entry"
-      style={{ animationDelay: `${index * 0.05}s` }}
+      style={{ animationDelay: `${Math.min(index, 5) * 0.02}s` }}
     >
       {/* Caption above media */}
       <div style={{
@@ -1311,7 +1307,7 @@ function LettersView({ onBack }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {letters.map((letter, idx) => (
               <div key={letter.id || idx} className="fade-up" style={{
-                animationDelay: `${idx * 0.04}s`,
+                animationDelay: `${Math.min(idx, 5) * 0.02}s`,
                 background: t.card,
                 borderRadius: '14px',
                 boxShadow: t.shadow,
