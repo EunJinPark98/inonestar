@@ -498,6 +498,29 @@ export default function Admin() {
   const resolveParent = (chosen, childId) =>
     String(chosen || parentOf(childId)?.id || parentFolders[0]?.id || '');
 
+  // 대표 이미지는 폴더 id 별로 저장한다. 상위폴더 id 로도 지정할 수 있어
+  // 상위폴더 카드에 쓸 사진을 따로 고를 수 있다.
+  const toggleCover = async (folderId, url) => {
+    const key = String(folderId || '');
+    if (!key) return;
+
+    const isCover = covers[key] === url;
+    const next = { ...covers };
+    if (isCover) delete next[key]; else next[key] = url;
+    setCovers(next);
+
+    try {
+      await fetch('/functions/api/covers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, covers: next })
+      });
+      showToast(isCover ? '대표 이미지를 해제했어요' : '대표 이미지로 설정했어요');
+    } catch (_) {
+      showToast('대표 이미지 저장에 실패했어요');
+    }
+  };
+
   const selectStyle = {
     flex: 1, minWidth: 0,
     padding: '11px 12px', fontSize: '14px',
@@ -1243,36 +1266,39 @@ export default function Admin() {
                             </select>
                           </div>
                         </div>
-                        {/* Cover image toggle */}
-                        {isImageFile(item.url) && (
-                          <button className="btn-press" onClick={async () => {
-                            const fid = editData?.folderId || item.folderId;
-                            const isCover = covers[fid] === item.url;
-                            const next = { ...covers };
-                            if (isCover) { delete next[fid]; } else { next[fid] = item.url; }
-                            setCovers(next);
-                            try {
-                              await fetch('/functions/api/covers', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ password, covers: next })
-                              });
-                            } catch (_) {}
-                            showToast(isCover ? '대표 이미지 해제했어요' : '대표 이미지로 설정했어요');
-                          }}
-                            style={{
-                              width: '100%', padding: '10px', marginBottom: '10px',
-                              fontSize: '13px', fontWeight: '600',
-                              background: covers[(editData?.folderId || item.folderId)] === item.url ? theme.successSoft : theme.borderLight,
-                              color: covers[(editData?.folderId || item.folderId)] === item.url ? theme.success : theme.inkSoft,
-                              border: covers[(editData?.folderId || item.folderId)] === item.url ? `1.5px solid ${theme.success}` : `1.5px solid ${theme.border}`,
-                              borderRadius: '8px', cursor: 'pointer',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                            }}
-                          >
-                            {covers[(editData?.folderId || item.folderId)] === item.url ? '★ 대표 이미지 해제' : '☆ 이 폴더의 대표 이미지로 설정'}
-                          </button>
-                        )}
+                        {/* Cover image toggle — 이 폴더 / 상위폴더 */}
+                        {isImageFile(item.url) && (() => {
+                          const fid = String(editData?.folderId || item.folderId || '');
+                          const parent = parentOf(fid);
+                          const targets = [{ id: fid, kind: '이 폴더', name: findFolder(fid)?.name }];
+                          if (parent) targets.push({ id: String(parent.id), kind: '상위폴더', name: parent.name });
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                              {targets.map(target => {
+                                const on = covers[target.id] === item.url;
+                                return (
+                                  <button key={target.id} className="btn-press"
+                                    onClick={() => toggleCover(target.id, item.url)}
+                                    style={{
+                                      width: '100%', padding: '10px',
+                                      fontSize: '13px', fontWeight: '600',
+                                      background: on ? theme.successSoft : theme.borderLight,
+                                      color: on ? theme.success : theme.inkSoft,
+                                      border: `1.5px solid ${on ? theme.success : theme.border}`,
+                                      borderRadius: '8px', cursor: 'pointer',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    }}
+                                  >
+                                    {on
+                                      ? `★ ${target.kind} 대표 이미지 해제`
+                                      : `☆ ${target.kind}${target.name ? `(${target.name})` : ''} 대표 이미지로`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
 
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button className="btn-press" onClick={() => { setEditIndex(null); setEditData(null); }}
