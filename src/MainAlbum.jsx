@@ -839,11 +839,22 @@ function Pager({ current, total, onChange }) {
    ═══════════════════════════════════ */
 function PhotoCard({ item, index }) {
   const [loaded, setLoaded] = useState(false);
+  // 저장된 비율이 없을 때, 먼저 도착한 이미지에서 실제 비율을 알아낸다.
+  const [natural, setNatural] = useState(null);
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef(null);
   const wrapRef = useRef(null);
   const photo = isImage(item.url);
   const hasPoster = Boolean(item.poster);
+
+  const known = (item.w && item.h) ? { w: item.w, h: item.h } : natural;
+  const photoRatio = known ? `${known.w} / ${known.h}` : '3 / 4';
+
+  const rememberSize = (e) => {
+    if (known) return;
+    const { naturalWidth: w, naturalHeight: h } = e.target;
+    if (w && h) setNatural({ w, h });
+  };
 
   // 포스터가 없는 예전 영상은 첫 프레임을 받아 썸네일로 써야 한다.
   // 목록에 들어오자마자 전부 받으면 느리니, 화면에 보일 때만 받는다.
@@ -942,7 +953,10 @@ function PhotoCard({ item, index }) {
         borderRadius: '14px',
         overflow: 'hidden',
         boxShadow: t.shadowMd,
-        minHeight: photo ? '200px' : '200px',
+        // 비율대로 자리를 먼저 잡아 두면 사진이 도착해도 높이가 변하지 않는다.
+        // 저장된 비율이 없으면 폰 사진에서 흔한 3:4 로 두었다가,
+        // 이미지가 도착하면 실제 비율로 교정한다.
+        ...(photo ? { aspectRatio: photoRatio } : { minHeight: '200px' }),
       }}>
         {!loaded && photo && !item.thumb && (
           <div className="img-loading" style={{
@@ -961,7 +975,12 @@ function PhotoCard({ item, index }) {
                 aria-hidden="true"
                 loading="lazy"
                 decoding="async"
-                style={{ width: '100%', display: 'block' }}
+                onLoad={rememberSize}
+                style={{
+                  position: 'absolute', inset: 0,
+                  width: '100%', height: '100%',
+                  objectFit: 'cover',
+                }}
               />
             )}
             <img
@@ -969,8 +988,8 @@ function PhotoCard({ item, index }) {
               alt={item.title}
               loading="lazy"
               decoding="async"
-              onLoad={() => setLoaded(true)}
-              style={item.thumb ? {
+              onLoad={(e) => { rememberSize(e); setLoaded(true); }}
+              style={photo ? {
                 position: 'absolute', inset: 0,
                 width: '100%', height: '100%',
                 objectFit: 'cover',

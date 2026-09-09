@@ -177,7 +177,7 @@ const capturePosterFromSrc = (src) => new Promise((resolve) => {
       canvas.width = Math.round(w * scale);
       canvas.height = Math.round(h * scale);
       canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => finish(blob), 'image/jpeg', 0.8);
+      canvas.toBlob((blob) => finish(blob && { blob, w, h }), 'image/jpeg', 0.8);
     } catch {
       finish(null);
     }
@@ -231,7 +231,7 @@ const makeImageThumb = (src) => new Promise((resolve) => {
       canvas.width = Math.round(w * scale);
       canvas.height = Math.round(h * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => finish(blob), 'image/jpeg', 0.72);
+      canvas.toBlob((blob) => finish(blob && { blob, w, h }), 'image/jpeg', 0.72);
     } catch {
       finish(null);
     }
@@ -290,7 +290,7 @@ export default function Admin() {
   const [listPage, setListPage] = useState(0);
   const PER_PAGE = 20;
 
-  const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1', poster: '', thumb: '' });
+  const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1', poster: '', thumb: '', w: 0, h: 0 });
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [saving, setSaving] = useState(false);
@@ -355,9 +355,14 @@ export default function Admin() {
 
         if (blob) {
           const key = makeKey(item.url, isPhoto ? '_thumb' : '_poster').replace(/\.[^.]+$/, '.jpg');
-          const res = await uploadBlob(blob, key, 'image/jpeg', password);
+          const res = await uploadBlob(blob.blob, key, 'image/jpeg', password);
           if (res.success) {
-            made[item.url] = { field: isPhoto ? 'thumb' : 'poster', url: res.url };
+            made[item.url] = {
+              field: isPhoto ? 'thumb' : 'poster',
+              url: res.url,
+              w: blob.w,
+              h: blob.h,
+            };
             ok = true;
           }
         }
@@ -382,7 +387,8 @@ export default function Admin() {
 
       const next = base.map(item => {
         const entry = made[item.url];
-        return entry ? { ...item, [entry.field]: entry.url } : item;
+        // 비율(w, h)을 함께 저장해 두면 원본이 오기 전에도 자리를 정확히 잡을 수 있다.
+        return entry ? { ...item, [entry.field]: entry.url, w: entry.w, h: entry.h } : item;
       });
       setPhotos(next);
 
@@ -453,16 +459,21 @@ export default function Admin() {
       let poster = '';
       let thumb = '';
 
+      let w = 0;
+      let h = 0;
+
       const small = isVideo ? await captureVideoPoster(file) : await thumbFromFile(file);
       if (small) {
         const smallKey = makeKey(file.name, isVideo ? '_poster' : '_thumb').replace(/\.[^.]+$/, '.jpg');
-        const smallRes = await uploadBlob(small, smallKey, 'image/jpeg', password);
+        const smallRes = await uploadBlob(small.blob, smallKey, 'image/jpeg', password);
         if (smallRes.success) {
           if (isVideo) poster = smallRes.url; else thumb = smallRes.url;
+          w = small.w;
+          h = small.h;
         }
       }
 
-      setNewPhoto(prev => ({ ...prev, url: result.url, poster, thumb }));
+      setNewPhoto(prev => ({ ...prev, url: result.url, poster, thumb, w, h }));
     } catch {
       showToast('업로드 오류가 발생했어요');
       setPreviewUrl('');
@@ -479,7 +490,7 @@ export default function Admin() {
     }
 
     setPhotos([{ ...newPhoto, uploadedAt: Date.now() }, ...photos]);
-    setNewPhoto({ ...newPhoto, url: '', title: '', date: '', poster: '', thumb: '' });
+    setNewPhoto({ ...newPhoto, url: '', title: '', date: '', poster: '', thumb: '', w: 0, h: 0 });
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl('');
     if (fileInputRef.current) fileInputRef.current.value = '';
