@@ -27,9 +27,9 @@ const sortByDate = (items) =>
   [...items].sort((a, b) => {
     const diff = parseDate(a.date) - parseDate(b.date);
     if (diff !== 0) return diff;
-    // 같은 날짜면 나중에 올린 것이 위로 오도록 업로드 시간 내림차순.
+    // 같은 날짜면 먼저 올린 것이 위로 오도록 업로드 시간 오름차순.
     // uploadedAt이 없는 옛 기록은 가장 먼저 올라간 것으로 취급한다.
-    return (b.uploadedAt || 0) - (a.uploadedAt || 0);
+    return (a.uploadedAt || 0) - (b.uploadedAt || 0);
   });
 
 const t = {
