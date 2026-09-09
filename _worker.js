@@ -284,8 +284,9 @@ async function handleMediaStream(request, url, env) {
     return new Response('Not found', { status: 404 });
   }
 
+  const isVideoPath = url.pathname.startsWith('/functions/api/video/');
   const ext = (key.split('.').pop() || '').toLowerCase();
-  const contentType = CONTENT_TYPES[ext] || 'application/octet-stream';
+  const contentType = CONTENT_TYPES[ext] || (isVideoPath ? 'video/mp4' : 'application/octet-stream');
 
   const headers = {
     'Content-Type': contentType,

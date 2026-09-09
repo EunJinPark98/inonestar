@@ -938,10 +938,7 @@ function PhotoCard({ item, index }) {
       {/* Media */}
       <div style={{
         position: 'relative',
-        // 원본이 도착하기 전에는 작은 썸네일을 먼저 깔아 둔다.
-        background: (photo && item.thumb && !loaded)
-          ? `url(${item.thumb}) center/cover`
-          : t.warm1,
+        background: t.warm1,
         borderRadius: '14px',
         overflow: 'hidden',
         boxShadow: t.shadowMd,
@@ -954,19 +951,39 @@ function PhotoCard({ item, index }) {
         )}
 
         {photo ? (
-          <img
-            src={item.url}
-            alt={item.title}
-            loading="lazy"
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            style={{
-              width: '100%',
-              display: 'block',
-              opacity: loaded ? 1 : 0,
-              transition: 'opacity 0.5s ease',
-            }}
-          />
+          <>
+            {/* 작은 썸네일이 자리와 비율을 먼저 잡아 준다.
+                배경으로 깔면 높이를 모르는 상태라 상하가 잘려 보인다. */}
+            {item.thumb && (
+              <img
+                src={item.thumb}
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                style={{ width: '100%', display: 'block' }}
+              />
+            )}
+            <img
+              src={item.url}
+              alt={item.title}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setLoaded(true)}
+              style={item.thumb ? {
+                position: 'absolute', inset: 0,
+                width: '100%', height: '100%',
+                objectFit: 'cover',
+                opacity: loaded ? 1 : 0,
+                transition: 'opacity 0.4s ease',
+              } : {
+                width: '100%',
+                display: 'block',
+                opacity: loaded ? 1 : 0,
+                transition: 'opacity 0.5s ease',
+              }}
+            />
+          </>
         ) : (
           <>
             <video
