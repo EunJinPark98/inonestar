@@ -55,8 +55,9 @@ export default {
         return handleDeleteLetter(request, env);
       }
 
-      if (url.pathname.startsWith('/functions/api/video/')) {
-        return handleVideoStream(request, url, env);
+      if (url.pathname.startsWith('/functions/api/video/') ||
+          url.pathname.startsWith('/functions/api/media/')) {
+        return handleMediaStream(request, url, env);
       }
 
       if (url.pathname === '/functions/api/list-photos' && request.method === 'GET') {
@@ -254,8 +255,19 @@ async function handleDeleteLetter(request, env) {
   return Response.json({ success: true });
 }
 
-async function handleVideoStream(request, url, env) {
-  const key = decodeURIComponent(url.pathname.replace('/functions/api/video/', ''));
+const CONTENT_TYPES = {
+  mp4: 'video/mp4', mov: 'video/quicktime',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  gif: 'image/gif', webp: 'image/webp',
+  heic: 'image/heic', heif: 'image/heif',
+};
+
+// R2 파일을 워커를 통해 내보낸다. r2.dev 로 직접 받는 것과 달리
+// 캐시 헤더가 붙고, 같은 출처라 canvas 로 썸네일을 뽑을 수 있다.
+async function handleMediaStream(request, url, env) {
+  const key = decodeURIComponent(
+    url.pathname.replace('/functions/api/video/', '').replace('/functions/api/media/', '')
+  );
   const rangeHeader = request.headers.get('Range');
 
   const opts = rangeHeader ? { range: { suffix: undefined } } : {};
@@ -272,10 +284,8 @@ async function handleVideoStream(request, url, env) {
     return new Response('Not found', { status: 404 });
   }
 
-  const ext = key.split('.').pop().toLowerCase();
-  const contentType = ext === 'mp4' ? 'video/mp4'
-    : ext === 'mov' ? 'video/quicktime'
-    : 'video/mp4';
+  const ext = (key.split('.').pop() || '').toLowerCase();
+  const contentType = CONTENT_TYPES[ext] || 'application/octet-stream';
 
   const headers = {
     'Content-Type': contentType,

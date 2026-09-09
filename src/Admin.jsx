@@ -145,9 +145,9 @@ const R2_BASE = 'https://pub-1b703dcc28274ffc8bea84f2cdabeaf5.r2.dev/';
 
 // 이미 올라간 영상은 워커를 통해 같은 출처로 받는다.
 // r2.dev에서 바로 받으면 canvas가 오염돼 프레임을 못 꺼낸다.
-const sameOriginVideoUrl = (url) => {
+const sameOriginUrl = (url, kind = 'media') => {
   const key = decodeURIComponent((url || '').replace(R2_BASE, ''));
-  return '/functions/api/video/' + key.split('/').map(encodeURIComponent).join('/');
+  return `/functions/api/${kind}/` + key.split('/').map(encodeURIComponent).join('/');
 };
 
 // 영상에서 첫 프레임을 뽑아 포스터 이미지를 만든다.
@@ -207,6 +207,48 @@ const capturePosterFromSrc = (src) => new Promise((resolve) => {
   video.src = src;
 });
 
+// 사진을 작게 줄인 썸네일. 폴더 목록의 80px 칸에 원본(수 MB)을 쓰지 않기 위한 것.
+const makeImageThumb = (src) => new Promise((resolve) => {
+  const img = new Image();
+  let settled = false;
+
+  const finish = (blob) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    resolve(blob);
+  };
+  const timer = setTimeout(() => finish(null), 20000);
+
+  img.onload = () => {
+    try {
+      const w = img.naturalWidth || 0;
+      const h = img.naturalHeight || 0;
+      if (!w || !h) return finish(null);
+
+      const scale = Math.min(1, 480 / Math.max(w, h));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => finish(blob), 'image/jpeg', 0.72);
+    } catch {
+      finish(null);
+    }
+  };
+  img.onerror = () => finish(null);
+  img.src = src;
+});
+
+const thumbFromFile = async (file) => {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return await makeImageThumb(objectUrl);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 // 업로드 직전 고른 파일에서 뽑을 때
 const captureVideoPoster = async (file) => {
   const objectUrl = URL.createObjectURL(file);
@@ -248,7 +290,7 @@ export default function Admin() {
   const [listPage, setListPage] = useState(0);
   const PER_PAGE = 20;
 
-  const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1', poster: '' });
+  const [newPhoto, setNewPhoto] = useState({ url: '', title: '', date: '', folderId: '1', poster: '', thumb: '' });
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [saving, setSaving] = useState(false);
@@ -279,9 +321,12 @@ export default function Admin() {
       .catch(() => {});
   }, []);
 
-  // 포스터가 없는 예전 영상 목록
+  // 작은 이미지가 없는 예전 기록. 영상은 포스터, 사진은 썸네일이 대상.
   const posterTargets = useMemo(
-    () => photos.filter(item => item.url && !IMAGE_EXT.test(item.url) && !item.poster),
+    () => photos.filter(item => {
+      if (!item.url) return false;
+      return IMAGE_EXT.test(item.url) ? !item.thumb : !item.poster;
+    }),
     [photos]
   );
 
@@ -296,18 +341,23 @@ export default function Admin() {
     backfillStop.current = false;
     setBackfill({ total: targets.length, done: 0, failed: 0, running: true });
 
-    const posters = {};
+    const made = {};
     for (const item of targets) {
       if (backfillStop.current) break;
 
+      const isPhoto = IMAGE_EXT.test(item.url);
       let ok = false;
+
       try {
-        const blob = await capturePosterFromUrl(sameOriginVideoUrl(item.url));
+        // 워커를 거쳐 같은 출처로 받아야 canvas 로 꺼낼 수 있다.
+        const src = sameOriginUrl(item.url, isPhoto ? 'media' : 'video');
+        const blob = isPhoto ? await makeImageThumb(src) : await capturePosterFromUrl(src);
+
         if (blob) {
-          const key = makeKey(item.url, '_poster').replace(/\.[^.]+$/, '.jpg');
+          const key = makeKey(item.url, isPhoto ? '_thumb' : '_poster').replace(/\.[^.]+$/, '.jpg');
           const res = await uploadBlob(blob, key, 'image/jpeg', password);
           if (res.success) {
-            posters[item.url] = res.url;
+            made[item.url] = { field: isPhoto ? 'thumb' : 'poster', url: res.url };
             ok = true;
           }
         }
@@ -318,7 +368,7 @@ export default function Admin() {
       setBackfill(b => ({ ...b, done: b.done + (ok ? 1 : 0), failed: b.failed + (ok ? 0 : 1) }));
     }
 
-    const madeCount = Object.keys(posters).length;
+    const madeCount = Object.keys(made).length;
 
     if (madeCount > 0) {
       // 작업 중에 목록이 바뀌었을 수 있으니 최신 목록에 얹는다.
@@ -330,7 +380,10 @@ export default function Admin() {
         // 최신 목록을 못 받으면 화면에 있는 것으로 진행
       }
 
-      const next = base.map(item => (posters[item.url] ? { ...item, poster: posters[item.url] } : item));
+      const next = base.map(item => {
+        const entry = made[item.url];
+        return entry ? { ...item, [entry.field]: entry.url } : item;
+      });
       setPhotos(next);
 
       try {
@@ -395,17 +448,21 @@ export default function Admin() {
         return;
       }
 
+      // 목록에서 원본을 통째로 받지 않도록 작은 이미지를 함께 올린다.
+      // 영상은 첫 프레임 포스터, 사진은 축소 썸네일.
       let poster = '';
-      if (isVideo) {
-        const blob = await captureVideoPoster(file);
-        if (blob) {
-          const posterKey = makeKey(file.name, '_poster').replace(/\.[^.]+$/, '.jpg');
-          const posterRes = await uploadBlob(blob, posterKey, 'image/jpeg', password);
-          if (posterRes.success) poster = posterRes.url;
+      let thumb = '';
+
+      const small = isVideo ? await captureVideoPoster(file) : await thumbFromFile(file);
+      if (small) {
+        const smallKey = makeKey(file.name, isVideo ? '_poster' : '_thumb').replace(/\.[^.]+$/, '.jpg');
+        const smallRes = await uploadBlob(small, smallKey, 'image/jpeg', password);
+        if (smallRes.success) {
+          if (isVideo) poster = smallRes.url; else thumb = smallRes.url;
         }
       }
 
-      setNewPhoto(prev => ({ ...prev, url: result.url, poster }));
+      setNewPhoto(prev => ({ ...prev, url: result.url, poster, thumb }));
     } catch {
       showToast('업로드 오류가 발생했어요');
       setPreviewUrl('');
@@ -422,7 +479,7 @@ export default function Admin() {
     }
 
     setPhotos([{ ...newPhoto, uploadedAt: Date.now() }, ...photos]);
-    setNewPhoto({ ...newPhoto, url: '', title: '', date: '', poster: '' });
+    setNewPhoto({ ...newPhoto, url: '', title: '', date: '', poster: '', thumb: '' });
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -436,7 +493,7 @@ export default function Admin() {
     const updated = photos.filter((_, i) => i !== index);
 
     // 1. R2에서 실제 파일 삭제 (영상은 포스터 이미지도 함께)
-    for (const url of [item.url, item.poster]) {
+    for (const url of [item.url, item.poster, item.thumb]) {
       if (!url) continue;
       try {
         await fetch('/functions/api/delete', {
@@ -707,14 +764,14 @@ export default function Admin() {
             }}>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: theme.ink }}>
-                  영상 썸네일 만들기
+                  썸네일 만들기
                 </div>
                 <div style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '3px' }}>
                   {backfill.running
-                    ? '영상을 하나씩 열어보는 중이에요'
+                    ? '하나씩 열어보는 중이에요'
                     : posterTargets.length > 0
-                      ? `썸네일 없는 영상 ${posterTargets.length}개`
-                      : '모든 영상에 썸네일이 있어요'}
+                      ? `썸네일 없는 사진·영상 ${posterTargets.length}개`
+                      : '모두 썸네일이 있어요'}
                 </div>
               </div>
 
@@ -770,8 +827,8 @@ export default function Admin() {
 
             {!backfill.running && posterTargets.length > 0 && (
               <div style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '10px', lineHeight: 1.6 }}>
-                영상을 한 번씩 받아야 해서 시간이 걸립니다. 와이파이에서 하시는 걸 권해요.
-                한 번 만들어 두면 앨범에서 영상 목록이 훨씬 빨라집니다.
+                원본을 한 번씩 받아야 해서 시간이 걸립니다. 와이파이에서 하시는 걸 권해요.
+                한 번 만들어 두면 폴더 목록과 영상이 훨씬 빨라집니다.
               </div>
             )}
           </div>

@@ -190,11 +190,21 @@ export default function MainAlbum() {
   const selectedParent = folders.find(f => sameId(f.id, currentParent));
   const currentChildren = currentParent !== null ? (childrenByParent[currentParent] || []) : [];
 
+  // 폴더 목록의 작은 썸네일에 원본 사진을 쓰면 장당 수 MB가 오간다.
+  // 업로드할 때 만들어 둔 작은 썸네일이 있으면 그걸 쓴다.
+  const thumbByUrl = useMemo(() => {
+    const map = {};
+    photos.forEach(item => { if (item.thumb) map[item.url] = item.thumb; });
+    return map;
+  }, [photos]);
+
   const getCoverImage = (folderId) => {
-    if (covers[String(folderId)]) return covers[String(folderId)];
+    const chosen = covers[String(folderId)];
+    if (chosen) return thumbByUrl[chosen] || chosen;
+
     const items = allFolderItems[folderId] || [];
     const img = items.find(item => isImage(item.url));
-    return img ? img.url : null;
+    return img ? (img.thumb || img.url) : null;
   };
 
   // 화면을 바로 바꾼다. 예전에는 전체를 흐리게 했다가 되돌리느라
@@ -928,13 +938,16 @@ function PhotoCard({ item, index }) {
       {/* Media */}
       <div style={{
         position: 'relative',
-        background: t.warm1,
+        // 원본이 도착하기 전에는 작은 썸네일을 먼저 깔아 둔다.
+        background: (photo && item.thumb && !loaded)
+          ? `url(${item.thumb}) center/cover`
+          : t.warm1,
         borderRadius: '14px',
         overflow: 'hidden',
         boxShadow: t.shadowMd,
         minHeight: photo ? '200px' : '200px',
       }}>
-        {!loaded && photo && (
+        {!loaded && photo && !item.thumb && (
           <div className="img-loading" style={{
             position: 'absolute', inset: 0,
           }} />
@@ -944,6 +957,8 @@ function PhotoCard({ item, index }) {
           <img
             src={item.url}
             alt={item.title}
+            loading="lazy"
+            decoding="async"
             onLoad={() => setLoaded(true)}
             style={{
               width: '100%',
