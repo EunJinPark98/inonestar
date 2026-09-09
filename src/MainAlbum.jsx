@@ -19,7 +19,7 @@ const getVideoUrl = (url) => {
   return '/functions/api/video/' + key;
 };
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 15;
 
 const parseDate = (d) => new Date((d || '').replace(/\./g, '-'));
 
