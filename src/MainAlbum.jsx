@@ -24,7 +24,13 @@ const PAGE_SIZE = 15;
 const parseDate = (d) => new Date((d || '').replace(/\./g, '-'));
 
 const sortByDate = (items) =>
-  [...items].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  [...items].sort((a, b) => {
+    const diff = parseDate(a.date) - parseDate(b.date);
+    if (diff !== 0) return diff;
+    // 같은 날짜면 나중에 올린 것이 위로 오도록 업로드 시간 내림차순.
+    // uploadedAt이 없는 옛 기록은 가장 먼저 올라간 것으로 취급한다.
+    return (b.uploadedAt || 0) - (a.uploadedAt || 0);
+  });
 
 const t = {
   bg: '#FAF8F5',
