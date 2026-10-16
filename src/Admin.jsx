@@ -270,6 +270,7 @@ export default function Admin() {
   const [view, setView] = useState('register');
   const [editIndex, setEditIndex] = useState(null);
   const [editData, setEditData] = useState(null);
+  const [posterUploading, setPosterUploading] = useState(null);
   const [covers, setCovers] = useState({});
   const [adminLetters, setAdminLetters] = useState([]);
   const [folders, setFolders] = useState([
@@ -568,6 +569,45 @@ export default function Admin() {
 
   // 대표 이미지는 폴더 id 별로 저장한다. 상위폴더 id 로도 지정할 수 있어
   // 상위폴더 카드에 쓸 사진을 따로 고를 수 있다.
+  // 브라우저가 못 여는 코덱(아이폰 HEVC .mov 등)은 첫 프레임을 뽑을 수 없다.
+  // 그런 영상은 썸네일로 쓸 사진을 직접 골라 올린다.
+  const uploadVideoPoster = async (index, file) => {
+    if (!file) return;
+
+    setPosterUploading(index);
+    try {
+      const small = await thumbFromFile(file);
+      if (!small) {
+        showToast('이미지를 읽지 못했어요');
+        return;
+      }
+
+      const key = makeKey(file.name, '_poster').replace(/\.[^.]+$/, '.jpg');
+      const res = await uploadBlob(small.blob, key, 'image/jpeg', password);
+      if (!res.success) {
+        showToast('업로드에 실패했어요');
+        return;
+      }
+
+      const next = photos.map((item, i) =>
+        i === index ? { ...item, poster: res.url, w: small.w, h: small.h } : item
+      );
+      setPhotos(next);
+      if (editData) setEditData({ ...editData, poster: res.url, w: small.w, h: small.h });
+
+      await fetch('/functions/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password, data: next })
+      });
+      showToast('썸네일을 설정했어요');
+    } catch {
+      showToast('썸네일 설정에 실패했어요');
+    } finally {
+      setPosterUploading(null);
+    }
+  };
+
   const toggleCover = async (folderId, url) => {
     const key = String(folderId || '');
     if (!key) return;
@@ -1334,6 +1374,49 @@ export default function Admin() {
                             </select>
                           </div>
                         </div>
+                        {/* 영상 썸네일 직접 올리기 */}
+                        {!isImageFile(item.url) && (
+                          <div style={{ marginBottom: '10px' }}>
+                            <label style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                              width: '100%', padding: '10px',
+                              fontSize: '13px', fontWeight: '600',
+                              background: (editData?.poster || item.poster) ? theme.successSoft : theme.borderLight,
+                              color: (editData?.poster || item.poster) ? theme.success : theme.inkSoft,
+                              border: `1.5px solid ${(editData?.poster || item.poster) ? theme.success : theme.border}`,
+                              borderRadius: '8px',
+                              cursor: posterUploading === index ? 'default' : 'pointer',
+                            }}>
+                              {posterUploading === index
+                                ? '올리는 중...'
+                                : (editData?.poster || item.poster)
+                                  ? '★ 썸네일 있음 — 사진으로 바꾸기'
+                                  : '☆ 썸네일로 쓸 사진 고르기'}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                disabled={posterUploading === index}
+                                onChange={e => {
+                                  const file = e.target.files[0];
+                                  e.target.value = '';
+                                  uploadVideoPoster(index, file);
+                                }}
+                              />
+                            </label>
+                            {(editData?.poster || item.poster) && (
+                              <img
+                                src={editData?.poster || item.poster}
+                                alt=""
+                                style={{
+                                  width: '100%', marginTop: '8px',
+                                  borderRadius: '8px', display: 'block',
+                                }}
+                              />
+                            )}
+                          </div>
+                        )}
+
                         {/* Cover image toggle — 이 폴더 / 상위폴더 */}
                         {isImageFile(item.url) && (() => {
                           const fid = String(editData?.folderId || item.folderId || '');
