@@ -155,22 +155,25 @@ const sameOriginUrl = (url, kind = 'media') => {
 // 브라우저가 못 여는 코덱(HEVC .mov 등)이면 null을 돌려주고 조용히 넘어간다.
 const capturePosterFromSrc = (src) => new Promise((resolve) => {
   let settled = false;
+  let seeking = false;
   const video = document.createElement('video');
 
-  const finish = (blob) => {
+  const finish = (result) => {
     if (settled) return;
     settled = true;
     clearTimeout(hardTimer);
-    clearTimeout(seekTimer);
+    try { video.pause(); } catch { /* 이미 멈춘 경우 */ }
     video.removeAttribute('src');
-    resolve(blob);
+    resolve(result);
   };
 
+  // 프레임이 준비되지 않았으면 아무것도 하지 않고 다음 이벤트를 기다린다.
   const draw = () => {
+    if (settled) return;
     try {
       const w = video.videoWidth || 0;
       const h = video.videoHeight || 0;
-      if (!w || !h) return finish(null);
+      if (!w || !h || video.readyState < 2) return;
 
       const scale = Math.min(1, 720 / w);
       const canvas = document.createElement('canvas');
@@ -183,28 +186,45 @@ const capturePosterFromSrc = (src) => new Promise((resolve) => {
     }
   };
 
-  const hardTimer = setTimeout(() => finish(null), 30000);
-  let seekTimer = 0;
+  // 첫 프레임은 검은 화면인 경우가 많아 0.5초 지점으로 옮겨 찍는다.
+  const seekThenDraw = () => {
+    if (settled || seeking) return;
+    seeking = true;
+    try { video.pause(); } catch { /* 무시 */ }
 
-  video.preload = 'metadata';
-  video.muted = true;
-  video.playsInline = true;
-
-  video.onloadedmetadata = () => {
     const target = Math.min(0.5, (video.duration || 1) / 2);
-    video.currentTime = Number.isFinite(target) && target > 0 ? target : 0;
+    if (Number.isFinite(target) && target > 0 && Math.abs(video.currentTime - target) > 0.05) {
+      video.currentTime = target;
+      // 이동이 끝나지 않아도 2초 뒤에는 지금 프레임으로 진행한다.
+      setTimeout(draw, 2000);
+    } else {
+      draw();
+    }
   };
 
-  // 파일에 따라 seeked가 끝내 오지 않는 경우가 있다. 그때는 지금 프레임이라도 쓴다.
-  video.onloadeddata = () => {
-    clearTimeout(seekTimer);
-    seekTimer = setTimeout(() => { if (video.readyState >= 2) draw(); }, 3000);
-  };
+  const hardTimer = setTimeout(() => finish(null), 15000);
 
+  // iOS 사파리는 재생을 시작하기 전에는 영상 데이터를 받지 않는다.
+  // 소리를 끈 채 잠깐 재생시켜야 프레임이 생긴다.
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.preload = 'auto';
+
+  video.onloadeddata = seekThenDraw;
+  video.ontimeupdate = () => { if (video.currentTime > 0) seekThenDraw(); };
   video.onseeked = draw;
   video.onerror = () => finish(null);
 
   video.src = src;
+
+  const started = video.play();
+  if (started && typeof started.catch === 'function') {
+    // 재생이 막히면 메타데이터만으로라도 시도한다.
+    started.catch(() => { if (!settled) seekThenDraw(); });
+  }
 });
 
 // 사진을 작게 줄인 썸네일. 폴더 목록의 80px 칸에 원본(수 MB)을 쓰지 않기 위한 것.
