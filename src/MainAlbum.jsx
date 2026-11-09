@@ -958,51 +958,36 @@ function PhotoCard({ item, index }) {
         // 이미지가 도착하면 실제 비율로 교정한다.
         ...(photo ? { aspectRatio: photoRatio } : { minHeight: '200px' }),
       }}>
-        {!loaded && photo && !item.thumb && (
+        {!loaded && photo && (
           <div className="img-loading" style={{
             position: 'absolute', inset: 0,
           }} />
         )}
 
         {photo ? (
-          <>
-            {/* 작은 썸네일이 자리와 비율을 먼저 잡아 준다.
-                배경으로 깔면 높이를 모르는 상태라 상하가 잘려 보인다. */}
-            {item.thumb && (
-              <img
-                src={item.thumb}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-                onLoad={rememberSize}
-                style={{
-                  position: 'absolute', inset: 0,
-                  width: '100%', height: '100%',
-                  objectFit: 'cover',
-                }}
-              />
-            )}
+          // 목록에서는 표시용 이미지만 받는다. 원본은 장당 3~4MB 라
+          // 한 페이지에 50MB 가까이 오가고 있었다. 원본은 눌렀을 때 연다.
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${item.title} 원본 보기`}
+            style={{ position: 'absolute', inset: 0, display: 'block' }}
+          >
             <img
-              src={item.url}
+              src={item.thumb || item.url}
               alt={item.title}
               loading="lazy"
               decoding="async"
               onLoad={(e) => { rememberSize(e); setLoaded(true); }}
-              style={photo ? {
-                position: 'absolute', inset: 0,
+              style={{
                 width: '100%', height: '100%',
                 objectFit: 'cover',
                 opacity: loaded ? 1 : 0,
-                transition: 'opacity 0.4s ease',
-              } : {
-                width: '100%',
-                display: 'block',
-                opacity: loaded ? 1 : 0,
-                transition: 'opacity 0.5s ease',
+                transition: 'opacity 0.3s ease',
               }}
             />
-          </>
+          </a>
         ) : (
           <>
             <video

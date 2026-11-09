@@ -227,7 +227,12 @@ const capturePosterFromSrc = (src) => new Promise((resolve) => {
   }
 });
 
-// 사진을 작게 줄인 썸네일. 폴더 목록의 80px 칸에 원본(수 MB)을 쓰지 않기 위한 것.
+// 목록에 쓸 표시용 이미지. 원본(2천만 화소, 3~4MB)을 그대로 쓰면
+// 한 페이지에 50MB 가까이 오간다. 가로 1080px 이면 폰 화면에서 선명하고
+// 용량은 100KB 안팎이다. THUMB_VERSION 은 다시 만들어야 할 때 올린다.
+const THUMB_WIDTH = 1080;
+const THUMB_VERSION = 2;
+
 const makeImageThumb = (src) => new Promise((resolve) => {
   const img = new Image();
   let settled = false;
@@ -246,12 +251,13 @@ const makeImageThumb = (src) => new Promise((resolve) => {
       const h = img.naturalHeight || 0;
       if (!w || !h) return finish(null);
 
-      const scale = Math.min(1, 480 / Math.max(w, h));
+      // 화면 가로폭이 기준이라 긴 변이 아니라 가로를 맞춘다.
+      const scale = Math.min(1, THUMB_WIDTH / w);
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(w * scale);
       canvas.height = Math.round(h * scale);
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => finish(blob && { blob, w, h }), 'image/jpeg', 0.72);
+      canvas.toBlob((blob) => finish(blob && { blob, w, h }), 'image/jpeg', 0.75);
     } catch {
       finish(null);
     }
@@ -346,7 +352,9 @@ export default function Admin() {
   const posterTargets = useMemo(
     () => photos.filter(item => {
       if (!item.url) return false;
-      return IMAGE_EXT.test(item.url) ? !item.thumb : !item.poster;
+      // 사진은 표시용 이미지가 없거나, 예전 작은 크기로 만들어진 것도 대상.
+      if (IMAGE_EXT.test(item.url)) return !item.thumb || item.thumbV !== THUMB_VERSION;
+      return !item.poster;
     }),
     [photos]
   );
@@ -383,6 +391,7 @@ export default function Admin() {
               url: res.url,
               w: blob.w,
               h: blob.h,
+              version: isPhoto ? THUMB_VERSION : undefined,
             };
             ok = true;
           }
@@ -409,7 +418,10 @@ export default function Admin() {
       const next = base.map(item => {
         const entry = made[item.url];
         // 비율(w, h)을 함께 저장해 두면 원본이 오기 전에도 자리를 정확히 잡을 수 있다.
-        return entry ? { ...item, [entry.field]: entry.url, w: entry.w, h: entry.h } : item;
+        if (!entry) return item;
+        const updated = { ...item, [entry.field]: entry.url, w: entry.w, h: entry.h };
+        if (entry.version) updated.thumbV = entry.version;
+        return updated;
       });
       setPhotos(next);
 
@@ -494,7 +506,7 @@ export default function Admin() {
         }
       }
 
-      setNewPhoto(prev => ({ ...prev, url: result.url, poster, thumb, w, h }));
+      setNewPhoto(prev => ({ ...prev, url: result.url, poster, thumb, w, h, thumbV: thumb ? THUMB_VERSION : 0 }));
     } catch {
       showToast('업로드 오류가 발생했어요');
       setPreviewUrl('');
@@ -841,7 +853,7 @@ export default function Admin() {
                   {backfill.running
                     ? '하나씩 열어보는 중이에요'
                     : posterTargets.length > 0
-                      ? `썸네일 없는 사진·영상 ${posterTargets.length}개`
+                      ? `다시 만들 사진·영상 ${posterTargets.length}개`
                       : '모두 썸네일이 있어요'}
                 </div>
               </div>
@@ -898,8 +910,8 @@ export default function Admin() {
 
             {!backfill.running && posterTargets.length > 0 && (
               <div style={{ fontSize: '11px', color: theme.inkMuted, marginTop: '10px', lineHeight: 1.6 }}>
-                원본을 한 번씩 받아야 해서 시간이 걸립니다. 와이파이에서 하시는 걸 권해요.
-                한 번 만들어 두면 폴더 목록과 영상이 훨씬 빨라집니다.
+                원본을 한 번씩 받아야 해서 시간이 걸립니다. 꼭 와이파이에서 해주세요.
+                한 번 만들어 두면 앨범이 훨씬 빠르고 선명해집니다.
               </div>
             )}
           </div>
