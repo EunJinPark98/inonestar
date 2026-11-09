@@ -1,0 +1,33 @@
+name: 표시용 사진 만들기
+
+# 앨범 목록은 원본(3~4MB) 대신 줄인 사본을 받는다. 그 사본을 만든다.
+# 매주 월요일 새벽 4시 20분(KST)에 돌고, Actions 탭에서 직접 실행할 수도 있다.
+on:
+  schedule:
+    - cron: '20 19 * * 0'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '이번에 처리할 최대 장수 (비우면 전부)'
+        required: false
+        default: ''
+
+jobs:
+  thumbs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ImageMagick 준비
+        run: |
+          if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y imagemagick
+          fi
+          (magick -version || convert -version) | head -1
+
+      - name: 만들기 실행
+        env:
+          INONESTAR_ADMIN_PASSWORD: ${{ secrets.INONESTAR_ADMIN_PASSWORD }}
+          INONESTAR_LIMIT: ${{ inputs.limit }}
+        run: node scripts/make-thumbs.mjs
